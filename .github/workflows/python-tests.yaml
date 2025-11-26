@@ -1,6 +1,6 @@
 name: Python API Tests
 
-on:
+on: 
   push:
 
 jobs:
@@ -15,6 +15,14 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: "3.12"
+
+      - name: Set environment variables for tests
+        run: |
+          echo "DATABASE_URL=postgresql://test_user:test_password@localhost:5432/test_db" >> $GITHUB_ENV
+          echo "SECRET_KEY=testsecret" >> $GITHUB_ENV
+          echo "ARCADE_API_KEY=testkey" >> $GITHUB_ENV
+          echo "FIREBASE_USER_CREDENTIALS_PATH=./firebase/test-user.json" >> $GITHUB_ENV
+          echo "FIREBASE_ADMIN_CREDENTIALS_PATH=./firebase/test-admin.json" >> $GITHUB_ENV
 
       - name: Install dependencies
         run: |
