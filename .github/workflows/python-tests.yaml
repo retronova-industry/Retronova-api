@@ -18,9 +18,11 @@ jobs:
 
       - name: Set environment variables for tests
         run: |
-          echo "DATABASE_URL=postgresql://test_user:test_password@localhost:5432/test_db" >> $GITHUB_ENV
+          echo "DATABASE_URL=sqlite:///:memory:" >> $GITHUB_ENV
           echo "SECRET_KEY=test-secret" >> $GITHUB_ENV
           echo "ARCADE_API_KEY=test" >> $GITHUB_ENV
+          echo "FIREBASE_USER_CREDENTIALS_PATH=./dummy" >> $GITHUB_ENV
+          echo "FIREBASE_ADMIN_CREDENTIALS_PATH=./dummy" >> $GITHUB_ENV
           echo "CI=true" >> $GITHUB_ENV
           
       - name: Install dependencies
