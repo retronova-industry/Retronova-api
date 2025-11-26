@@ -74,7 +74,13 @@ def db():
 @pytest.fixture
 def mock_firebase():
     with patch("app.api.deps.verify_firebase_token") as mock_verify:
+        mock_verify.return_value = {
+            "uid": "unauthorized_user",
+            "email": "unauth@example.com",
+            "email_verified": True
+        }
         yield mock_verify
+
 
 
 @pytest.fixture
