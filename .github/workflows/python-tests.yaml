@@ -21,8 +21,8 @@ jobs:
           echo "DATABASE_URL=postgresql://test_user:test_password@localhost:5432/test_db" >> $GITHUB_ENV
           echo "SECRET_KEY=test-secret-key-for-github-actions" >> $GITHUB_ENV
           echo "ARCADE_API_KEY=test-arcade-key" >> $GITHUB_ENV
-          echo "FIREBASE_USER_CREDENTIALS_PATH=./firebase/firebase-user-credentials.json" >> $GITHUB_ENV
-          echo "FIREBASE_ADMIN_CREDENTIALS_PATH=./firebase/firebase-admin-credentials.json" >> $GITHUB_ENV
+          echo "FIREBASE_USER_CREDENTIALS_PATH=./tests/firebase-user-credentials.json" >> $GITHUB_ENV
+          echo "FIREBASE_ADMIN_CREDENTIALS_PATH=./tests/firebase-admin-credentials.json" >> $GITHUB_ENV
         
       - name: Install dependencies
         run: |
