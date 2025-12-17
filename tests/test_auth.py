@@ -110,9 +110,9 @@ class TestAuth:
         assert data["email"] == sample_user.email
         assert data["pseudo"] == sample_user.pseudo
 
-    def test_get_current_user_unauthorized(self, client):
+    def test_get_current_user_unauthorized(self, auth_headers_user, client):
         """Test de récupération sans authentification."""
-        response = client.get("/api/v1/auth/me")
+        response = client.get("/api/v1/auth/me", headers=auth_headers_user)
 
         assert response.status_code == 403
 
