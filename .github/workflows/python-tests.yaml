@@ -20,7 +20,7 @@ jobs:
         run: |
           echo "DATABASE_URL=sqlite:///:memory:" >> $GITHUB_ENV
           echo "SECRET_KEY=test-secret" >> $GITHUB_ENV
-          echo "ARCADE_API_KEY=test" >> $GITHUB_ENV
+          echo "ARCADE_API_KEY=arcade-super-secret-api-key-change-this-in-production" >> $GITHUB_ENV
           echo "FIREBASE_USER_CREDENTIALS_PATH=./README.md" >> $GITHUB_ENV
           echo "FIREBASE_ADMIN_CREDENTIALS_PATH=./README.md" >> $GITHUB_ENV
           echo "CI=true" >> $GITHUB_ENV
@@ -32,4 +32,12 @@ jobs:
           pip install pytest
 
       - name: Run tests
-        run: pytest tests -v
+        run: |
+          pytest tests -v
+      
+      - name: Upload pytest report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pytest-report
+          path: report.xml
