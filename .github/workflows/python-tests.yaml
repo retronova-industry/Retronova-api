@@ -33,7 +33,7 @@ jobs:
 
       - name: Run tests
         run: |
-          pytest tests -v
+          pytest tests -v --tb=short --junitxml=report.xml
       
       - name: Upload pytest report
         uses: actions/upload-artifact@v4
