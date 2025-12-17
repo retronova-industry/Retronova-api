@@ -202,7 +202,6 @@ SonarCloud analyse notamment :
 - les bugs potentiels
 - les failles de sécurité
 - la maintenabilité
-- la couverture de tests (si configurée)
 
 ### Où voir les résultats rapidement
 
