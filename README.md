@@ -187,6 +187,43 @@ pytest
 pytest --cov=app tests/
 ```
 
+## 📊 Qualité du code
+
+
+La qualité du code de l’API est analysée automatiquement par **SonarCloud (SonarQube Cloud)**.
+
+### Fonctionnement
+L’analyse est exécutée via **GitHub Actions** :
+- à chaque **commit sur la branche `main`**
+- à chaque **Pull Request / Merge Request**
+
+SonarCloud analyse notamment :
+- la qualité du code (code smells)
+- les bugs potentiels
+- les failles de sécurité
+- la maintenabilité
+
+### Où voir les résultats rapidement
+
+#### 🔹 Depuis GitHub
+1. Aller dans l’onglet **Actions**
+2. Ouvrir le workflow **SonarQube / SonarCloud**
+3. À la fin du job, un **lien direct vers l’analyse SonarCloud** est affiché dans les logs
+
+#### 🔹 Depuis SonarCloud
+Les résultats sont également accessibles directement sur SonarCloud :
+
+👉 **Lien du projet**  
+https://sonarcloud.io/project/overview?id=retronova-industry_Retronova-api
+
+### Quality Gate
+Un **Quality Gate** est appliqué sur le projet.  
+Si celui-ci échoue :
+- la Pull Request est signalée comme non conforme
+- les problèmes doivent être corrigés avant le merge
+
+Cela garantit un niveau de qualité constant sur la branche `main`.
+
 ## 📈 Monitoring
 
 L'API expose des endpoints de santé :
