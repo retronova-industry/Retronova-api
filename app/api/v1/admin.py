@@ -719,7 +719,7 @@ async def get_admin_stats(
         "total_games": total_games,
         "active_promo_codes": active_promo_codes,
         "total_tickets_in_circulation": total_tickets,
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }
 
 

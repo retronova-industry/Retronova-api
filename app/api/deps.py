@@ -10,10 +10,13 @@ security = HTTPBearer()
 
 
 def get_current_user(
-        db: Session = Depends(get_db),
-        credentials: HTTPAuthorizationCredentials = Depends(security)
+        db: Session = Depends(get_db), # NOSONAR
+        credentials: HTTPAuthorizationCredentials = Depends(security) # NOSONAR
 ) -> User:
-    """Dependency pour obtenir l'utilisateur actuel via Firebase."""
+    return _get_user_from_token(db, credentials)
+
+def _get_user_from_token(db: Session, credentials: HTTPAuthorizationCredentials) -> User:
+    """Helper pour extraire l'utilisateur depuis un token Firebase."""
     token_data = verify_firebase_token(credentials.credentials, "user")
     if not token_data:
         raise HTTPException(
@@ -21,7 +24,6 @@ def get_current_user(
             detail="Token Firebase invalide"
         )
 
-    # Recherche l'utilisateur en base
     user = db.query(User).filter(
         User.firebase_uid == token_data["uid"],
         User.is_deleted == False
@@ -37,7 +39,6 @@ def get_current_user(
 
 
 def get_current_admin(
-        db: Session = Depends(get_db),
         credentials: HTTPAuthorizationCredentials = Depends(security)
 ) -> dict:
     """Dependency pour obtenir l'admin actuel via Firebase Admin."""

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from datetime import datetime, timezone
 from app.core.database import get_db
 from app.models.user import User
@@ -12,7 +12,7 @@ router = APIRouter()
 
 @router.get("/me", response_model=UserResponse)
 async def get_my_profile(
-        current_user: User = Depends(get_current_user)
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Récupère le profil de l'utilisateur connecté."""
     return current_user
@@ -21,8 +21,8 @@ async def get_my_profile(
 @router.put("/me", response_model=UserResponse)
 async def update_my_profile(
         user_update: UserUpdate,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Met à jour le profil de l'utilisateur connecté."""
 
@@ -64,8 +64,8 @@ async def update_my_profile(
 
 @router.delete("/me")
 async def delete_my_account(
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Permet à un utilisateur de supprimer son propre compte (soft delete)."""
 
@@ -110,10 +110,10 @@ async def delete_my_account(
 
 @router.get("/search", response_model=List[UserSearchResponse])
 async def search_users(
-        q: str = Query(..., min_length=2, description="Terme de recherche (pseudo, nom, prénom)"),
-        limit: int = Query(10, le=50),
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        q: Annotated[str, Query(..., min_length=2, description="Terme de recherche (pseudo, nom, prénom)")],
+        limit: Annotated[int, Query(10, le=50)],
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Recherche des utilisateurs par pseudo, nom ou prénom."""
 

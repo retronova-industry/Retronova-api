@@ -36,8 +36,6 @@ class TestPromos:
 
     def test_use_promo_code_case_insensitive(self, client, auth_headers_user, sample_user, sample_promo_code, db):
         """Test que les codes promo sont insensibles à la casse."""
-        initial_balance = sample_user.tickets_balance
-
         promo_data = {
             "code": sample_promo_code.code.lower()  # En minuscules
         }
