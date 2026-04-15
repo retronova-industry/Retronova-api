@@ -254,6 +254,62 @@ async def create_game(
     }
 
 
+@router.delete("/games/{game_id}")
+async def soft_delete_game(
+        game_id: int,
+        db: Session = Depends(get_db),
+        _: dict = Depends(get_current_admin)
+):
+    """Supprime un jeu (soft delete)."""
+
+    game = db.query(Game).filter(
+        Game.id == game_id,
+        Game.is_deleted == False
+    ).first()
+
+    if not game:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Jeu non trouvé"
+        )
+
+    # Bloquer si des réservations actives utilisent ce jeu
+    from app.models.reservation import Reservation, ReservationStatus
+    active_reservations = db.query(Reservation).filter(
+        Reservation.game_id == game_id,
+        Reservation.status.in_([ReservationStatus.WAITING, ReservationStatus.PLAYING]),
+        Reservation.is_deleted == False
+    ).count()
+
+    if active_reservations > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Impossible de supprimer le jeu : {active_reservations} réservation(s) active(s)"
+        )
+
+    # Soft delete du jeu
+    game.is_deleted = True
+    game.deleted_at = datetime.now(timezone.utc)
+
+    # Soft delete des associations arcade-jeu
+    arcade_games = db.query(ArcadeGame).filter(
+        ArcadeGame.game_id == game_id,
+        ArcadeGame.is_deleted == False
+    ).all()
+
+    for ag in arcade_games:
+        ag.is_deleted = True
+        ag.deleted_at = datetime.now(timezone.utc)
+
+    db.commit()
+
+    return {
+        "message": f"Jeu '{game.nom}' supprimé avec succès",
+        "game_id": game.id,
+        "deleted_associations": len(arcade_games)
+    }
+
+
 # === GESTION DES CODES PROMO ===
 @router.post("/promo-codes/")
 async def create_promo_code(
