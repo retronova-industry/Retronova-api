@@ -1,7 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi import _rate_limit_exceeded_handler
+
 from app.core.config import settings
 from app.core.security import init_firebase
+from app.core.rate_limit import limiter
+
 from app.api.v1 import auth, users, friends, tickets, games, arcades, reservations, scores, promos, admin
 
 # Initialisation Firebase
@@ -13,6 +20,10 @@ app = FastAPI(
     debug=settings.DEBUG
 )
 
+# 🔥 Rate limiter setup
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -20,6 +31,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 🔥 Middleware slowapi
+app.add_middleware(SlowAPIMiddleware)
 
 # Routes
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])

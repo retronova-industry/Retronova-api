@@ -22,6 +22,7 @@ firebase-admin
 bcrypt
 python-jose[cryptography]
 passlib[bcrypt]
+slowapi
 
 # Tests avec versions compatibles
 pytest>=7.4.0
