@@ -1,12 +1,13 @@
-import os, stripe
+import os
 from datetime import datetime, timezone
 from typing import Annotated, List
 
+import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.ticket import TicketOffer, TicketPurchase
 from app.models.user import User
@@ -23,15 +24,45 @@ if settings.STRIPE_SECRET_KEY:
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
+def _mark_purchase_as_paid_from_session(
+    db: Session,
+    purchase: TicketPurchase,
+    session_data,
+) -> None:
+    """
+    Mark the purchase as paid and credit tickets exactly once.
+    Used by webhook and by status polling fallback.
+    """
+    if purchase.status == "paid":
+        return
+
+    user = db.query(User).filter(
+        User.id == purchase.user_id,
+        User.is_deleted == False,  # noqa: E712
+    ).first()
+
+    if not user:
+        return
+
+    purchase.status = "paid"
+    purchase.paid_at = datetime.now(timezone.utc)
+
+    payment_intent = session_data.get("payment_intent")
+    if payment_intent:
+        purchase.stripe_payment_intent_id = payment_intent
+
+    user.tickets_balance += purchase.tickets_received
+    db.commit()
+
+
 @router.get("/offers", response_model=List[TicketOfferResponse])
 async def get_ticket_offers(
     db: Annotated[Session, Depends(get_db)],
 ):
-    """Récupère les offres de tickets disponibles."""
+    """Return available ticket offers."""
     offers = db.query(TicketOffer).filter(
-        TicketOffer.is_deleted == False
+        TicketOffer.is_deleted == False  # noqa: E712
     ).all()
-
     return offers
 
 
@@ -42,23 +73,20 @@ async def purchase_tickets(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     """
-    Crée une vraie session Stripe Checkout pour l'achat de tickets.
-    Les tickets ne sont PAS crédités ici.
-    Ils seront crédités uniquement via le webhook Stripe après confirmation du paiement.
+    Create Stripe Checkout session for ticket purchase.
+    Tickets are credited only after Stripe confirms payment.
     """
-
     offer = db.query(TicketOffer).filter(
         TicketOffer.id == purchase_data.offer_id,
-        TicketOffer.is_deleted == False
+        TicketOffer.is_deleted == False,  # noqa: E712
     ).first()
 
     if not offer:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Offre de tickets non trouvée"
+            detail="Offre de tickets non trouvee",
         )
 
-    # Créer un achat en attente
     purchase = TicketPurchase(
         user_id=current_user.id,
         offer_id=offer.id,
@@ -99,7 +127,7 @@ async def purchase_tickets(
         db.commit()
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Erreur Stripe lors de la création de la session: {str(exc)}"
+            detail=f"Erreur Stripe lors de la creation de la session: {str(exc)}",
         ) from exc
 
     purchase.stripe_checkout_session_id = checkout_session.id
@@ -119,20 +147,17 @@ async def get_purchase_status(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ):
-    """
-    Récupère le statut d'un achat de tickets.
-    """
-
+    """Return purchase status. Also sync with Stripe as a fallback."""
     purchase = db.query(TicketPurchase).filter(
         TicketPurchase.id == purchase_id,
         TicketPurchase.user_id == current_user.id,
-        TicketPurchase.is_deleted == False
+        TicketPurchase.is_deleted == False,  # noqa: E712
     ).first()
 
     if not purchase:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Achat non trouvé"
+            detail="Achat non trouve",
         )
 
     stripe_session_status = None
@@ -145,8 +170,19 @@ async def get_purchase_status(
             )
             stripe_session_status = checkout_session.status
             stripe_payment_status = checkout_session.payment_status
+
+            # Fallback if webhook was missed: trust Stripe on status polling.
+            if checkout_session.payment_status == "paid":
+                _mark_purchase_as_paid_from_session(
+                    db=db,
+                    purchase=purchase,
+                    session_data=checkout_session,
+                )
+            elif checkout_session.status == "expired" and purchase.status == "pending":
+                purchase.status = "expired"
+                db.commit()
         except stripe.error.StripeError:
-            # On garde les infos DB si Stripe ne répond pas
+            # Keep DB state if Stripe cannot be reached.
             pass
 
     return PurchaseStatusResponse(
@@ -166,23 +202,20 @@ async def stripe_webhook(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
 ):
-    """
-    Webhook Stripe pour confirmer le paiement et créditer les tickets.
-    """
-
+    """Stripe webhook to confirm payment and credit tickets."""
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
 
     if not settings.STRIPE_WEBHOOK_SECRET:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="STRIPE_WEBHOOK_SECRET manquante"
+            detail="STRIPE_WEBHOOK_SECRET manquante",
         )
 
     if not sig_header:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Header stripe-signature manquant"
+            detail="Header stripe-signature manquant",
         )
 
     try:
@@ -194,44 +227,37 @@ async def stripe_webhook(
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Payload webhook invalide"
+            detail="Payload webhook invalide",
         ) from exc
     except stripe.error.SignatureVerificationError as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Signature webhook invalide"
+            detail="Signature webhook invalide",
         ) from exc
 
     event_type = event["type"]
     session_data = event["data"]["object"]
 
-    if event_type in ("checkout.session.completed", "checkout.session.async_payment_succeeded"):
+    if event_type in (
+        "checkout.session.completed",
+        "checkout.session.async_payment_succeeded",
+    ):
         purchase = db.query(TicketPurchase).filter(
             TicketPurchase.stripe_checkout_session_id == session_data["id"],
-            TicketPurchase.is_deleted == False
+            TicketPurchase.is_deleted == False,  # noqa: E712
         ).first()
 
-        if purchase and purchase.status != "paid":
-            user = db.query(User).filter(
-                User.id == purchase.user_id,
-                User.is_deleted == False
-            ).first()
-
-            if user:
-                purchase.status = "paid"
-                purchase.paid_at = datetime.now(timezone.utc)
-
-                payment_intent = session_data.get("payment_intent")
-                if payment_intent:
-                    purchase.stripe_payment_intent_id = payment_intent
-
-                user.tickets_balance += purchase.tickets_received
-                db.commit()
+        if purchase:
+            _mark_purchase_as_paid_from_session(
+                db=db,
+                purchase=purchase,
+                session_data=session_data,
+            )
 
     elif event_type == "checkout.session.expired":
         purchase = db.query(TicketPurchase).filter(
             TicketPurchase.stripe_checkout_session_id == session_data["id"],
-            TicketPurchase.is_deleted == False
+            TicketPurchase.is_deleted == False,  # noqa: E712
         ).first()
 
         if purchase and purchase.status == "pending":
@@ -245,7 +271,7 @@ async def stripe_webhook(
 async def get_ticket_balance(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
-    """Récupère le solde de tickets de l'utilisateur."""
+    """Return user ticket balance."""
     return {"balance": current_user.tickets_balance}
 
 
@@ -254,13 +280,13 @@ async def get_purchase_history(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ):
-    """Récupère l'historique d'achats de tickets."""
+    """Return ticket purchase history."""
     purchases = db.query(TicketPurchase).filter(
         TicketPurchase.user_id == current_user.id,
-        TicketPurchase.is_deleted == False
+        TicketPurchase.is_deleted == False,  # noqa: E712
     ).order_by(
         TicketPurchase.created_at.desc(),
-        TicketPurchase.id.desc()
+        TicketPurchase.id.desc(),
     ).all()
 
     return purchases
