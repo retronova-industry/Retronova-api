@@ -10,7 +10,7 @@ from app.models.score import Score
 from app.models.game import Game
 from app.models.arcade import Arcade
 from app.services.score_service import ScoreService
-from app.schemas.score import CreateScoreRequest, ScoreResponse
+from app.schemas.score import CreateScoreRequest, MyStatsResponse, ScoreResponse
 from app.api.deps import get_current_user, verify_arcade_key
 
 router = APIRouter()
@@ -88,56 +88,11 @@ def get_scores(
         for score, p1, p2, game, arcade in rows
     ]
 
-
-@router.get("/my-stats")
+@router.get("/my-stats", response_model=MyStatsResponse)
 async def get_my_stats(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Récupère les statistiques personnelles de l'utilisateur."""
-
-    total_games = db.query(Score).filter(
-        or_(
-            Score.player1_id == current_user.id,
-            Score.player2_id == current_user.id
-        ),
-        Score.is_deleted == False
-    ).count()
-
-    solo_games = db.query(Score).filter(
-        Score.player1_id == current_user.id,
-        Score.player2_id.is_(None),
-        Score.is_deleted == False
-    ).count()
-
-    wins = db.query(Score).filter(
-        or_(
-            and_(Score.player1_id == current_user.id, Score.score_j1 > Score.score_j2),
-            and_(Score.player2_id == current_user.id, Score.score_j2 > Score.score_j1)
-        ),
-        Score.player2_id.isnot(None),
-        Score.is_deleted == False
-    ).count()
-
-    losses = db.query(Score).filter(
-        or_(
-            and_(Score.player1_id == current_user.id, Score.score_j1 < Score.score_j2),
-            and_(Score.player2_id == current_user.id, Score.score_j2 < Score.score_j1)
-        ),
-        Score.player2_id.isnot(None),
-        Score.is_deleted == False
-    ).count()
-
-    multi_games = total_games - solo_games
-    draws = multi_games - wins - losses
-    win_rate = (wins / multi_games * 100) if multi_games > 0 else 0
-
-    return {
-        "total_games": total_games,
-        "solo_games": solo_games,
-        "multiplayer_games": multi_games,
-        "wins": wins,
-        "losses": losses,
-        "draws": draws,
-        "win_rate": round(win_rate, 2)
-    }
+    score_service = ScoreService(db)
+    return score_service.get_my_stats(current_user)

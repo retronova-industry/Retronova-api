@@ -1,12 +1,13 @@
-from fastapi import HTTPException, status
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, func
 from sqlalchemy.orm import Session, aliased
-from app.schemas.score import ScoreResponse
+
+from app.schemas.score import ScoreResponse, MyStatsResponse, GameBestScoreResponse
 from app.models.arcade import Arcade
 from app.models.friend import Friendship, FriendshipStatus
 from app.models.score import Score
 from app.models.user import User
 from app.models.game import Game
+from fastapi import HTTPException, status
 
 
 class ScoreService:
@@ -159,4 +160,96 @@ class ScoreService:
             winner_pseudo=winner,
             is_single_player=is_single,
             created_at=score.created_at.isoformat()
+        )
+
+    def get_my_stats(self, current_user: User) -> MyStatsResponse:
+        total_games = self.db.query(Score).filter(
+            or_(
+                Score.player1_id == current_user.id,
+                Score.player2_id == current_user.id
+            ),
+            Score.is_deleted.is_(False)
+        ).count()
+
+        solo_games = self.db.query(Score).filter(
+            Score.player1_id == current_user.id,
+            Score.player2_id.is_(None),
+            Score.is_deleted.is_(False)
+        ).count()
+
+        wins = self.db.query(Score).filter(
+            or_(
+                and_(Score.player1_id == current_user.id, Score.score_j1 > Score.score_j2),
+                and_(Score.player2_id == current_user.id, Score.score_j2 > Score.score_j1)
+            ),
+            Score.player2_id.isnot(None),
+            Score.is_deleted.is_(False)
+        ).count()
+
+        losses = self.db.query(Score).filter(
+            or_(
+                and_(Score.player1_id == current_user.id, Score.score_j1 < Score.score_j2),
+                and_(Score.player2_id == current_user.id, Score.score_j2 < Score.score_j1)
+            ),
+            Score.player2_id.isnot(None),
+            Score.is_deleted.is_(False)
+        ).count()
+
+        multi_games = total_games - solo_games
+        draws = multi_games - wins - losses
+        win_rate = (wins / multi_games * 100) if multi_games > 0 else 0.0
+
+        player1_rows = self.db.query(
+            Score.game_id,
+            func.max(Score.score_j1).label("best_score")
+        ).filter(
+            Score.player1_id == current_user.id,
+            Score.is_deleted.is_(False)
+        ).group_by(Score.game_id).all()
+
+        player2_rows = self.db.query(
+            Score.game_id,
+            func.max(Score.score_j2).label("best_score")
+        ).filter(
+            Score.player2_id == current_user.id,
+            Score.score_j2.isnot(None),
+            Score.is_deleted.is_(False)
+        ).group_by(Score.game_id).all()
+
+        best_scores_map = {}
+
+        for row in player1_rows:
+            best_scores_map[row.game_id] = row.best_score
+
+        for row in player2_rows:
+            if row.game_id not in best_scores_map:
+                best_scores_map[row.game_id] = row.best_score
+            else:
+                best_scores_map[row.game_id] = max(best_scores_map[row.game_id], row.best_score)
+
+        best_scores_by_game = []
+        if best_scores_map:
+            games = self.db.query(Game).filter(
+                Game.id.in_(best_scores_map.keys()),
+                Game.is_deleted.is_(False)
+            ).all()
+
+            for game in sorted(games, key=lambda g: g.nom.lower()):
+                best_scores_by_game.append(
+                    GameBestScoreResponse(
+                        game_id=game.id,
+                        game_name=game.nom,
+                        best_score=best_scores_map[game.id]
+                    )
+                )
+
+        return MyStatsResponse(
+            total_games=total_games,
+            solo_games=solo_games,
+            multiplayer_games=multi_games,
+            wins=wins,
+            losses=losses,
+            draws=draws,
+            win_rate=round(win_rate, 2),
+            best_scores_by_game=best_scores_by_game
         )
