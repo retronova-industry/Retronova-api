@@ -110,17 +110,17 @@ async def delete_my_account(
 
 @router.get("/search", response_model=List[UserSearchResponse])
 async def search_users(
-        q: Annotated[str, Query(..., min_length=2, description="Terme de recherche (pseudo, nom, prénom)")],
-        limit: Annotated[int, Query(10, le=50)],
+        q: Annotated[str, Query(min_length=2, description="Terme de recherche (pseudo, nom, prénom)")],
         db: Annotated[Session, Depends(get_db)],
-        current_user: Annotated[User, Depends(get_current_user)]
+        current_user: Annotated[User, Depends(get_current_user)],
+        limit: Annotated[int, Query(le=50)] = 10,
 ):
     """Recherche des utilisateurs par pseudo, nom ou prénom."""
 
     search_term = f"%{q}%"
     users = db.query(User).filter(
         User.is_deleted == False,
-        User.id != current_user.id,  # Exclure l'utilisateur actuel
+        User.id != current_user.id,
         (
                 User.pseudo.ilike(search_term) |
                 User.nom.ilike(search_term) |
