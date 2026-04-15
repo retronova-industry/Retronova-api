@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Annotated, List, Optional
 import random
 from app.core.database import get_db
 from app.models.user import User
@@ -8,39 +8,16 @@ from app.models.arcade import Arcade, ArcadeGame
 from app.models.game import Game
 from app.models.reservation import Reservation, ReservationStatus
 from app.api.deps import get_current_user, verify_arcade_key
-from pydantic import BaseModel
+from app.schemas.reservation import CreateReservationRequest, ReservationResponse, UpdateReservationStatusRequest
+from app.core.messages import ARCADE_NOT_FOUND, INSUFFICIENT_TICKETS, RESERVATION_NOT_FOUND
 
 router = APIRouter()
-
-
-class CreateReservationRequest(BaseModel):
-    arcade_id: int
-    game_id: int
-    player2_id: Optional[int] = None
-
-
-class ReservationResponse(BaseModel):
-    id: int
-    unlock_code: str
-    status: ReservationStatus
-    arcade_name: str
-    game_name: str
-    player_pseudo: str
-    player2_pseudo: Optional[str]
-    tickets_used: int
-    position_in_queue: Optional[int]
-
-    class Config:
-        from_attributes = True
-
-class UpdateReservationStatusRequest(BaseModel):
-    status: ReservationStatus
 
 @router.post("/", response_model=ReservationResponse)
 async def create_reservation(
         reservation_data: CreateReservationRequest,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Crée une nouvelle réservation de partie."""
 
@@ -53,7 +30,7 @@ async def create_reservation(
     if not arcade:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Borne d'arcade non trouvée"
+            detail=ARCADE_NOT_FOUND
         )
 
     # Vérifier que le jeu existe et est disponible sur cette borne
@@ -105,7 +82,7 @@ async def create_reservation(
     if current_user.tickets_balance < game.ticket_cost:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tickets insuffisants"
+            detail=INSUFFICIENT_TICKETS
         )
 
     # Générer un code de déverrouillage (1-8)
@@ -151,8 +128,8 @@ async def create_reservation(
 
 @router.get("/", response_model=List[ReservationResponse])
 async def get_my_reservations(
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Récupère les réservations de l'utilisateur actuel."""
 
@@ -202,8 +179,8 @@ async def get_my_reservations(
 @router.get("/{reservation_id}", response_model=ReservationResponse)
 async def get_reservation(
         reservation_id: int,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Récupère les détails d'une réservation spécifique."""
 
@@ -216,7 +193,7 @@ async def get_reservation(
     if not reservation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Réservation non trouvée"
+            detail=RESERVATION_NOT_FOUND
         )
 
     # Récupérer le joueur 2 si nécessaire
@@ -252,8 +229,8 @@ async def get_reservation(
 @router.delete("/{reservation_id}")
 async def cancel_reservation(
         reservation_id: int,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Annule une réservation (seulement si en attente)."""
 
@@ -266,7 +243,7 @@ async def cancel_reservation(
     if not reservation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Réservation non trouvée"
+            detail=RESERVATION_NOT_FOUND
         )
 
     if reservation.status != ReservationStatus.WAITING:
@@ -288,8 +265,8 @@ async def cancel_reservation(
 async def update_reservation_status(
         reservation_id: int,
         status_data: UpdateReservationStatusRequest,
-        db: Session = Depends(get_db),
-        _: bool = Depends(verify_arcade_key)  # Seules les bornes peuvent changer le statut
+        db: Annotated[Session, Depends(get_db)],
+        _: Annotated[bool, Depends(verify_arcade_key)]
 ):
     """Met à jour le statut d'une réservation (accessible par clé API borne uniquement)."""
 
@@ -301,7 +278,7 @@ async def update_reservation_status(
     if not reservation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Réservation non trouvée"
+            detail=RESERVATION_NOT_FOUND
         )
 
     # Validation des transitions de statut
@@ -335,8 +312,8 @@ async def update_reservation_status(
 @router.get("/{reservation_id}/status")
 async def get_reservation_status(
         reservation_id: int,
-        db: Session = Depends(get_db),
-        _: bool = Depends(verify_arcade_key)
+        db: Annotated[Session, Depends(get_db)],
+        _: Annotated[bool, Depends(verify_arcade_key)]
 ):
     """Récupère le statut d'une réservation (accessible par clé API borne)."""
 
@@ -348,7 +325,7 @@ async def get_reservation_status(
     if not reservation:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Réservation non trouvée"
+            detail=RESERVATION_NOT_FOUND
         )
 
     return {

@@ -3,14 +3,15 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from app.core.database import get_db
 from app.models.arcade import Arcade, ArcadeGame
 from app.models.game import Game
 from app.models.reservation import Reservation, ReservationStatus
 from app.models.user import User
 from app.api.deps import verify_arcade_key, get_current_user
-from pydantic import BaseModel
+from app.schemas.arcade import ArcadeResponse, GameOnArcadeResponse, QueueItemResponse
+from app.core.messages import ARCADE_NOT_FOUND
 
 router = APIRouter()
 
@@ -60,7 +61,7 @@ class QueueItemResponse(BaseModel):
 
 @router.get("/", response_model=List[ArcadeResponse])
 async def get_arcades(
-        db: Session = Depends(get_db)
+        db: Annotated[Session, Depends(get_db)]
 ):
     """Récupère la liste de toutes les bornes d'arcade."""
 
@@ -111,7 +112,7 @@ async def get_arcades(
 @router.get("/{arcade_id}", response_model=ArcadeResponse)
 async def get_arcade(
         arcade_id: int,
-        db: Session = Depends(get_db)
+        db: Annotated[Session, Depends(get_db)]
 ):
     """Récupère les détails d'une borne d'arcade spécifique."""
 
@@ -123,7 +124,7 @@ async def get_arcade(
     if not arcade:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Borne d'arcade non trouvée"
+            detail=ARCADE_NOT_FOUND
         )
 
     # Récupérer les jeux de cette borne
@@ -164,8 +165,8 @@ async def get_arcade(
 @router.get("/{arcade_id}/queue", response_model=List[QueueItemResponse])
 async def get_arcade_queue(
         arcade_id: int,
-        db: Session = Depends(get_db),
-        _: bool = Depends(verify_arcade_key)
+    db: Annotated[Session, Depends(get_db)],
+    _: Annotated[bool, Depends(verify_arcade_key)]
 ):
     """Récupère la file d'attente d'une borne (authentification par clé API)."""
 
@@ -178,7 +179,7 @@ async def get_arcade_queue(
     if not arcade:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Borne d'arcade non trouvée"
+            detail=ARCADE_NOT_FOUND
         )
 
     # Récupérer la file d'attente (FIFO) avec toutes les informations nécessaires
@@ -218,12 +219,11 @@ async def get_arcade_queue(
 
     return queue
 
-
 @router.get("/{arcade_id}/config")
 async def get_arcade_config(
         arcade_id: int,
-        db: Session = Depends(get_db),
-        _: bool = Depends(verify_arcade_key)
+        db: Annotated[Session, Depends(get_db)],
+        _: Annotated[bool, Depends(verify_arcade_key)]
 ):
     """Récupère la configuration d'une borne (pour la borne elle-même)."""
 
@@ -235,7 +235,7 @@ async def get_arcade_config(
     if not arcade:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Borne d'arcade non trouvée"
+            detail=ARCADE_NOT_FOUND
         )
 
     # Récupérer les jeux installés

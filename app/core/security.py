@@ -24,6 +24,10 @@ def init_firebase():
 
         if not os.path.exists(settings.FIREBASE_ADMIN_CREDENTIALS_PATH):
             raise FileNotFoundError(f"Fichier Firebase admin non trouvé : {settings.FIREBASE_ADMIN_CREDENTIALS_PATH}")
+        
+        if os.getenv("CI") == "true" or not (os.path.exists(settings.FIREBASE_USER_CREDENTIALS_PATH) and os.path.exists(settings.FIREBASE_ADMIN_CREDENTIALS_PATH)):
+            print("Firebase disabled in CI")
+            return
 
         # App pour les utilisateurs finaux
         user_cred = credentials.Certificate(settings.FIREBASE_USER_CREDENTIALS_PATH)

@@ -1,3 +1,5 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
@@ -7,11 +9,10 @@ from app.api.deps import get_current_user
 
 router = APIRouter()
 
-
 @router.post("/register", response_model=UserResponse)
 async def register_user(
         user_data: UserCreate,
-        db: Session = Depends(get_db)
+        db: Annotated[Session, Depends(get_db)]
 ):
     """Enregistre un nouvel utilisateur après vérification Firebase."""
 
@@ -61,7 +62,7 @@ async def register_user(
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(
-        current_user: User = Depends(get_current_user)
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Retourne les informations de l'utilisateur connecté."""
     return current_user
