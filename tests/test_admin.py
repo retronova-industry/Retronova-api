@@ -293,6 +293,10 @@ class TestAdmin:
         assert "total_games" in data
         assert "active_promo_codes" in data
         assert "total_tickets_in_circulation" in data
+        assert "ticket_revenue" in data
+        assert "top_games" in data
+        assert "arcade_occupancy" in data
+        assert "reservations_evolution" in data
         assert "timestamp" in data
 
         # Vérifications des valeurs
@@ -301,6 +305,13 @@ class TestAdmin:
         assert data["total_games"] >= 1
         assert data["active_promo_codes"] >= 1
         assert data["total_tickets_in_circulation"] >= 0
+        assert "current_month" in data["ticket_revenue"]
+        assert "previous_month" in data["ticket_revenue"]
+        assert "currency" in data["ticket_revenue"]
+        assert isinstance(data["top_games"], list)
+        assert "occupancy_rate" in data["arcade_occupancy"]
+        assert isinstance(data["arcade_occupancy"].get("arcades", []), list)
+        assert isinstance(data["reservations_evolution"], list)
 
     # def test_admin_endpoints_unauthorized_user(self, client, auth_headers_user, sample_arcade, sample_game):
     #     """Test d'accès aux endpoints admin avec utilisateur normal."""
@@ -411,3 +422,4 @@ class TestAdmin:
         assert data["total_arcades"] == arcades_count
         assert data["total_games"] == games_count
         assert data["active_promo_codes"] == promo_codes_count
+        assert data["arcade_occupancy"]["total_arcades"] == arcades_count

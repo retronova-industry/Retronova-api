@@ -12,7 +12,8 @@ from app.core.database import get_db
 from app.models.arcade import Arcade, ArcadeGame
 from app.models.game import Game
 from app.models.promo import PromoCode
-from app.models.ticket import TicketOffer
+from app.models.reservation import Reservation, ReservationStatus
+from app.models.ticket import TicketOffer, TicketPurchase
 from app.models.user import User
 
 from app.core.messages import (
@@ -832,6 +833,14 @@ async def get_admin_stats(
     db: Annotated[Session, Depends(get_db)],
 ):
     """Récupère les statistiques globales de la plateforme."""
+    now_utc = datetime.now(timezone.utc)
+
+    current_month_start = datetime(now_utc.year, now_utc.month, 1, tzinfo=timezone.utc)
+    if now_utc.month == 1:
+        previous_month_start = datetime(now_utc.year - 1, 12, 1, tzinfo=timezone.utc)
+    else:
+        previous_month_start = datetime(now_utc.year, now_utc.month - 1, 1, tzinfo=timezone.utc)
+
     active_users = db.query(User).filter(User.is_deleted.is_(False)).count()
     total_arcades = db.query(Arcade).filter(Arcade.is_deleted.is_(False)).count()
     total_games = db.query(Game).filter(Game.is_deleted.is_(False)).count()
@@ -843,12 +852,120 @@ async def get_admin_stats(
         User.is_deleted.is_(False)
     ).scalar() or 0
 
+    current_month_revenue = db.query(func.sum(TicketPurchase.amount_paid)).filter(
+        TicketPurchase.is_deleted.is_(False),
+        TicketPurchase.created_at >= current_month_start,
+    ).scalar() or 0.0
+
+    previous_month_revenue = db.query(func.sum(TicketPurchase.amount_paid)).filter(
+        TicketPurchase.is_deleted.is_(False),
+        TicketPurchase.created_at >= previous_month_start,
+        TicketPurchase.created_at < current_month_start,
+    ).scalar() or 0.0
+
+    top_games_rows = db.query(
+        Game.id,
+        Game.nom,
+        func.count(Reservation.id).label("play_count"),
+    ).join(
+        Reservation,
+        Reservation.game_id == Game.id,
+    ).filter(
+        Game.is_deleted.is_(False),
+        Reservation.is_deleted.is_(False),
+        Reservation.status == ReservationStatus.COMPLETED,
+    ).group_by(
+        Game.id,
+        Game.nom,
+    ).order_by(
+        func.count(Reservation.id).desc(),
+    ).limit(5).all()
+
+    active_arcade_rows = db.query(
+        Reservation.arcade_id,
+        func.count(Reservation.id).label("active_count"),
+    ).filter(
+        Reservation.is_deleted.is_(False),
+        Reservation.status.in_([ReservationStatus.WAITING, ReservationStatus.PLAYING]),
+    ).group_by(
+        Reservation.arcade_id,
+    ).all()
+
+    active_arcades_map = {row.arcade_id: row.active_count for row in active_arcade_rows}
+    occupied_arcades = len(active_arcades_map)
+    global_occupancy_rate = round((occupied_arcades / total_arcades) * 100, 2) if total_arcades > 0 else 0
+
+    arcade_rows = db.query(Arcade.id, Arcade.nom).filter(
+        Arcade.is_deleted.is_(False)
+    ).all()
+
+    arcade_occupancy = [
+        {
+            "arcade_id": arcade.id,
+            "name": arcade.nom,
+            "active_reservations": active_arcades_map.get(arcade.id, 0),
+            "occupancy_rate": 100 if active_arcades_map.get(arcade.id, 0) > 0 else 0,
+        }
+        for arcade in arcade_rows
+    ]
+
+    reservations_start_date = (now_utc - timedelta(days=29)).replace(
+        hour=0,
+        minute=0,
+        second=0,
+        microsecond=0,
+    )
+
+    reservations_by_day_rows = db.query(
+        func.date(Reservation.created_at).label("reservation_date"),
+        func.count(Reservation.id).label("reservations_count"),
+    ).filter(
+        Reservation.is_deleted.is_(False),
+        Reservation.created_at >= reservations_start_date,
+    ).group_by(
+        func.date(Reservation.created_at),
+    ).all()
+
+    reservations_by_day_map = {
+        str(row.reservation_date): row.reservations_count
+        for row in reservations_by_day_rows
+    }
+
+    reservations_evolution = []
+    for offset in range(29, -1, -1):
+        day = (now_utc - timedelta(days=offset)).date()
+        day_iso = day.isoformat()
+        reservations_evolution.append({
+            "date": day_iso,
+            "reservations": reservations_by_day_map.get(day_iso, 0),
+        })
+
     return {
         "active_users": active_users,
         "total_arcades": total_arcades,
         "total_games": total_games,
         "active_promo_codes": active_promo_codes,
         "total_tickets_in_circulation": total_tickets,
+        "ticket_revenue": {
+            "current_month": round(float(current_month_revenue), 2),
+            "previous_month": round(float(previous_month_revenue), 2),
+            "currency": "EUR",
+        },
+        "top_games": [
+            {
+                "game_id": row.id,
+                "name": row.nom,
+                "play_count": row.play_count,
+            }
+            for row in top_games_rows
+        ],
+        "arcade_occupancy": {
+            "total_arcades": total_arcades,
+            "occupied_arcades": occupied_arcades,
+            "occupancy_rate": global_occupancy_rate,
+            "arcades": arcade_occupancy,
+        },
+        "reservations_evolution": reservations_evolution,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
