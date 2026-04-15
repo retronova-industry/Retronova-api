@@ -47,6 +47,7 @@ USER_NOT_FOUND_RESPONSE = {
 class CreateArcadeRequest(BaseModel):
     nom: str
     description: Optional[str] = ""
+    arcade_image: Optional[str] = None
     localisation: str
     latitude: float = 0.0
     longitude: float = 0.0
@@ -55,6 +56,7 @@ class CreateArcadeRequest(BaseModel):
 class CreateGameRequest(BaseModel):
     nom: str
     description: str
+    game_image: Optional[str] = None
     min_players: int = 1
     max_players: int = 2
     ticket_cost: int = 1
@@ -112,6 +114,7 @@ async def create_arcade(
     arcade = Arcade(
         nom=arcade_data.nom,
         description=arcade_data.description,
+        arcade_image=arcade_data.arcade_image,
         api_key=api_key,
         localisation=arcade_data.localisation,
         latitude=arcade_data.latitude,
@@ -149,6 +152,7 @@ async def update_arcade(
 
     arcade.nom = arcade_data.nom
     arcade.description = arcade_data.description
+    arcade.arcade_image = arcade_data.arcade_image
     arcade.localisation = arcade_data.localisation
     arcade.latitude = arcade_data.latitude
     arcade.longitude = arcade_data.longitude
@@ -239,6 +243,7 @@ async def create_game(
     game = Game(
         nom=game_data.nom,
         description=game_data.description,
+        game_image=game_data.game_image,
         min_players=game_data.min_players,
         max_players=game_data.max_players,
         ticket_cost=game_data.ticket_cost,

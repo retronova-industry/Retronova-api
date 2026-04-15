@@ -6,6 +6,7 @@ class GameOnArcadeResponse(BaseModel):
     id: int
     nom: str
     description: str
+    game_image: Optional[str] = None
     min_players: int
     max_players: int
     ticket_cost: int
@@ -19,6 +20,7 @@ class ArcadeResponse(BaseModel):
     id: int
     nom: str
     description: str
+    arcade_image: Optional[str] = None
     localisation: str
     latitude: float
     longitude: float
