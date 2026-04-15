@@ -65,10 +65,10 @@ class PromoCodeResponse(BaseModel):
     tickets_reward: int
     is_single_use_global: bool
     is_single_use_per_user: bool
-    usage_limit: Optional[int]
+    usage_limit: Optional[int] = None
     current_uses: int
-    valid_from: Optional[datetime]
-    valid_until: Optional[datetime]
+    valid_from: Optional[datetime] = None
+    valid_until: Optional[datetime] = None
     is_active: bool
     is_expired: bool
     days_until_expiry: int
