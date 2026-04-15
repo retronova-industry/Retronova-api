@@ -64,6 +64,69 @@ class ArcadeGameAssignmentRequest(BaseModel):
     slot_number: int
 
 
+# === RÉSERVATIONS ===
+
+class AdminReservationResponse(BaseModel):
+    id: int
+    unlock_code: str
+    status: str
+    arcade_name: str
+    game_name: str
+    player_pseudo: str
+    player2_pseudo: Optional[str]
+    tickets_used: int
+    position_in_queue: Optional[int]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+@router.get("/reservations/", response_model=List[AdminReservationResponse])
+async def get_all_reservations(
+        db: Session = Depends(get_db),
+        _: dict = Depends(get_current_admin)
+):
+    """Récupère toutes les réservations (admin uniquement)."""
+    from app.models.reservation import Reservation, ReservationStatus
+
+    reservations = db.query(Reservation).filter(
+        Reservation.is_deleted == False
+    ).order_by(Reservation.created_at.desc()).all()
+
+    result = []
+    for reservation in reservations:
+        player2_pseudo = None
+        if reservation.player2_id:
+            player2 = db.query(User).filter(User.id == reservation.player2_id).first()
+            if player2:
+                player2_pseudo = player2.pseudo
+
+        position_in_queue = None
+        if reservation.status == ReservationStatus.WAITING:
+            position_in_queue = db.query(Reservation).filter(
+                Reservation.arcade_id == reservation.arcade_id,
+                Reservation.status == ReservationStatus.WAITING,
+                Reservation.created_at <= reservation.created_at,
+                Reservation.is_deleted == False
+            ).count()
+
+        result.append(AdminReservationResponse(
+            id=reservation.id,
+            unlock_code=reservation.unlock_code,
+            status=reservation.status.value,
+            arcade_name=reservation.arcade.nom,
+            game_name=reservation.game.nom,
+            player_pseudo=reservation.player.pseudo,
+            player2_pseudo=player2_pseudo,
+            tickets_used=reservation.tickets_used,
+            position_in_queue=position_in_queue,
+            created_at=reservation.created_at
+        ))
+
+    return result
+
+
 # === GESTION DES BORNES ===
 @router.post("/arcades/")
 async def create_arcade(
