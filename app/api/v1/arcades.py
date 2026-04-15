@@ -19,6 +19,7 @@ class GameOnArcadeResponse(BaseModel):
     id: int
     nom: str
     description: str
+    game_image: Optional[str] = None
     min_players: int
     max_players: int
     ticket_cost: int
@@ -32,6 +33,7 @@ class ArcadeResponse(BaseModel):
     id: int
     nom: str
     description: str
+    arcade_image: Optional[str] = None
     localisation: str
     latitude: float
     longitude: float
@@ -83,6 +85,7 @@ async def get_arcades(
                 id=game.id,
                 nom=game.nom,
                 description=game.description,
+                game_image=game.game_image,
                 min_players=game.min_players,
                 max_players=game.max_players,
                 ticket_cost=game.ticket_cost,
@@ -94,6 +97,7 @@ async def get_arcades(
             id=arcade.id,
             nom=arcade.nom,
             description=arcade.description,
+            arcade_image=arcade.arcade_image,
             localisation=arcade.localisation,
             latitude=arcade.latitude,
             longitude=arcade.longitude,
@@ -137,6 +141,7 @@ async def get_arcade(
             id=game.id,
             nom=game.nom,
             description=game.description,
+            game_image=game.game_image,
             min_players=game.min_players,
             max_players=game.max_players,
             ticket_cost=game.ticket_cost,
@@ -148,6 +153,7 @@ async def get_arcade(
         id=arcade.id,
         nom=arcade.nom,
         description=arcade.description,
+        arcade_image=arcade.arcade_image,
         localisation=arcade.localisation,
         latitude=arcade.latitude,
         longitude=arcade.longitude,

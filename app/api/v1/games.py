@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 from app.core.database import get_db
 from app.models.game import Game
 from pydantic import BaseModel
@@ -12,6 +12,7 @@ class GameResponse(BaseModel):
     id: int
     nom: str
     description: str
+    game_image: Optional[str] = None
     min_players: int
     max_players: int
     ticket_cost: int
