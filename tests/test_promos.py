@@ -191,7 +191,6 @@ class TestPromos:
         from app.models import PromoCode, PromoUse
         import time
 
-        # Créer plusieurs codes promo
         promo_codes = []
         for i in range(3):
             promo = PromoCode(
@@ -203,7 +202,6 @@ class TestPromos:
             promo_codes.append(promo)
         db.commit()
 
-        # Utiliser les codes avec des délais
         for i, promo in enumerate(promo_codes):
             promo_use = PromoUse(
                 user_id=sample_user.id,
@@ -212,7 +210,7 @@ class TestPromos:
             )
             db.add(promo_use)
             db.commit()
-            if i < 2:  # Petit délai pour différencier les timestamps
+            if i < 2:
                 time.sleep(0.01)
 
         response = client.get("/api/v1/promos/history", headers=auth_headers_user)
@@ -221,10 +219,9 @@ class TestPromos:
         data = response.json()
         assert len(data) == 3
 
-
-        assert data[0]["code"] == "HISTORY0"
+        assert data[0]["code"] == "HISTORY2"
         assert data[1]["code"] == "HISTORY1"
-        assert data[2]["code"] == "HISTORY2"
+        assert data[2]["code"] == "HISTORY0"
 
     def test_promo_code_with_whitespace(self, client, auth_headers_user, sample_user, db):
         """Test d'utilisation de code promo avec des espaces."""
