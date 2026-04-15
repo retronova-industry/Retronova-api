@@ -119,12 +119,15 @@ class TestTickets:
         from app.models import TicketPurchase
 
         user_id = sample_user.id
+        offer_id = sample_ticket_offer.id
+        tickets_amount = sample_ticket_offer.tickets_amount
+        price_euros = sample_ticket_offer.price_euros
 
         purchase = TicketPurchase(
             user_id=user_id,
-            offer_id=sample_ticket_offer.id,
-            tickets_received=sample_ticket_offer.tickets_amount,
-            amount_paid=sample_ticket_offer.price_euros,
+            offer_id=offer_id,
+            tickets_received=tickets_amount,
+            amount_paid=price_euros,
             stripe_payment_id="test_payment_123",
             stripe_checkout_session_id="cs_test_history",
             status="pending",
@@ -138,7 +141,8 @@ class TestTickets:
         data = response.json()
         assert len(data) == 1
         assert data[0]["user_id"] == user_id
-        assert data[0]["tickets_received"] == sample_ticket_offer.tickets_amount
+        assert data[0]["tickets_received"] == tickets_amount
+        assert data[0]["amount_paid"] == price_euros
         assert data[0]["status"] == "pending"
 
     def test_purchase_creates_history_entry(self, client, auth_headers_user, sample_user, sample_ticket_offer, db):
