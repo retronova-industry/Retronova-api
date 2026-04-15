@@ -16,49 +16,6 @@ from app.core.messages import ARCADE_NOT_FOUND
 router = APIRouter()
 
 
-class GameOnArcadeResponse(BaseModel):
-    id: int
-    nom: str
-    description: str
-    game_image: Optional[str] = None
-    min_players: int
-    max_players: int
-    ticket_cost: int
-    slot_number: int
-
-    class Config:
-        from_attributes = True
-
-
-class ArcadeResponse(BaseModel):
-    id: int
-    nom: str
-    description: str
-    arcade_image: Optional[str] = None
-    localisation: str
-    latitude: float
-    longitude: float
-    games: List[GameOnArcadeResponse]
-
-    class Config:
-        from_attributes = True
-
-
-class QueueItemResponse(BaseModel):
-    id: int
-    player_id: int  # AJOUT: ID du joueur principal
-    player_pseudo: str
-    player2_id: Optional[int] = None  # AJOUT: ID du joueur 2
-    player2_pseudo: Optional[str]
-    game_id: int  # AJOUT: ID du jeu
-    game_name: str
-    unlock_code: str
-    position: int
-
-    class Config:
-        from_attributes = True
-
-
 @router.get("/", response_model=List[ArcadeResponse])
 async def get_arcades(
         db: Annotated[Session, Depends(get_db)]
