@@ -2,17 +2,23 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from datetime import datetime, timezone
+
 from app.core.database import get_db
 from app.core.messages import INVALID_PROMO_CODE
 from app.models.user import User
 from app.models.promo import PromoCode, PromoUse
 from app.api.deps import get_current_user
-from app.schemas.promo import AvailablePromoCodeResponse, PromoCodeResponse, PromoHistoryItemResponse, UsePromoCodeRequest
-from datetime import datetime, timezone
+from app.schemas.promo import (
+    AvailablePromoCodeResponse,
+    PromoHistoryItemResponse,
+    UsePromoCodeRequest,
+    UsePromoCodeResponse,
+)
 
 router = APIRouter()
 
-@router.post("/use", response_model=PromoCodeResponse)
+@router.post("/use", response_model=UsePromoCodeResponse)
 async def use_promo_code(
         promo_data: UsePromoCodeRequest,
         db: Annotated[Session, Depends(get_db)],
@@ -95,7 +101,7 @@ async def use_promo_code(
     db.add(promo_use)
     db.commit()
 
-    return PromoCodeResponse(
+    return UsePromoCodeResponse(
         tickets_received=promo_code.tickets_reward,
         new_balance=current_user.tickets_balance,
         message=f"Code promo utilisé avec succès ! Vous avez reçu {promo_code.tickets_reward} tickets."
