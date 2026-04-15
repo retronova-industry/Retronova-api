@@ -5,6 +5,7 @@ from typing import Annotated, List
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.ticket import TicketOffer, TicketPurchase
@@ -18,9 +19,8 @@ from app.schemas.ticket import (
 
 router = APIRouter()
 
-# À remplacer par tes vraies variables d'environnement / settings
-STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY")
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
+if settings.STRIPE_SECRET_KEY:
+    stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 @router.get("/offers", response_model=List[TicketOfferResponse])
@@ -173,6 +173,12 @@ async def stripe_webhook(
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature")
 
+    if not settings.STRIPE_WEBHOOK_SECRET:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="STRIPE_WEBHOOK_SECRET manquante"
+        )
+
     if not sig_header:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -183,7 +189,7 @@ async def stripe_webhook(
         event = stripe.Webhook.construct_event(
             payload=payload,
             sig_header=sig_header,
-            secret=STRIPE_WEBHOOK_SECRET,
+            secret=settings.STRIPE_WEBHOOK_SECRET,
         )
     except ValueError as exc:
         raise HTTPException(
