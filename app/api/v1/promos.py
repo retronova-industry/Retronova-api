@@ -120,7 +120,10 @@ async def get_promo_history(
     ).filter(
         PromoUse.user_id == current_user.id,
         PromoUse.is_deleted == False
-    ).order_by(PromoUse.created_at.desc()).all()
+    ).order_by(
+        PromoUse.created_at.desc(),
+        PromoUse.id.desc()
+    ).all()
 
     history = []
     for promo_use in promo_uses:
@@ -132,7 +135,6 @@ async def get_promo_history(
         })
 
     return history
-
 
 @router.get("/available", response_model=list[AvailablePromoCodeResponse])
 async def get_available_promo_codes(
