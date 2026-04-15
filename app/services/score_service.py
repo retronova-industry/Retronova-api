@@ -1,12 +1,13 @@
-from fastapi import HTTPException, status
-from sqlalchemy import and_, func, or_
+from sqlalchemy import and_, or_, func
 from sqlalchemy.orm import Session, aliased
-from app.schemas.score import GameBestScoreResponse, MyStatsResponse, ScoreResponse
+
+from app.schemas.score import ScoreResponse, MyStatsResponse, GameBestScoreResponse
 from app.models.arcade import Arcade
 from app.models.friend import Friendship, FriendshipStatus
 from app.models.score import Score
 from app.models.user import User
 from app.models.game import Game
+from fastapi import HTTPException, status
 
 
 class ScoreService:
@@ -160,7 +161,7 @@ class ScoreService:
             is_single_player=is_single,
             created_at=score.created_at.isoformat()
         )
-    
+
     def get_my_stats(self, current_user: User) -> MyStatsResponse:
         total_games = self.db.query(Score).filter(
             or_(
@@ -198,54 +199,49 @@ class ScoreService:
         draws = multi_games - wins - losses
         win_rate = (wins / multi_games * 100) if multi_games > 0 else 0.0
 
-        player1_best_scores = self.db.query(
-            Score.game_id.label("game_id"),
+        player1_rows = self.db.query(
+            Score.game_id,
             func.max(Score.score_j1).label("best_score")
         ).filter(
             Score.player1_id == current_user.id,
             Score.is_deleted.is_(False)
-        ).group_by(Score.game_id).subquery()
+        ).group_by(Score.game_id).all()
 
-        player2_best_scores = self.db.query(
-            Score.game_id.label("game_id"),
+        player2_rows = self.db.query(
+            Score.game_id,
             func.max(Score.score_j2).label("best_score")
         ).filter(
             Score.player2_id == current_user.id,
             Score.score_j2.isnot(None),
             Score.is_deleted.is_(False)
-        ).group_by(Score.game_id).subquery()
+        ).group_by(Score.game_id).all()
 
-        combined_best_scores = self.db.query(
-            player1_best_scores.c.game_id,
-            player1_best_scores.c.best_score
-        ).union_all(
-            self.db.query(
-                player2_best_scores.c.game_id,
-                player2_best_scores.c.best_score
-            )
-        ).subquery()
+        best_scores_map = {}
 
-        best_scores_rows = self.db.query(
-            combined_best_scores.c.game_id,
-            Game.nom.label("game_name"),
-            func.max(combined_best_scores.c.best_score).label("best_score")
-        ).join(
-            Game, Game.id == combined_best_scores.c.game_id
-        ).filter(
-            Game.is_deleted.is_(False)
-        ).group_by(
-            combined_best_scores.c.game_id,
-            Game.nom
-        ).order_by(Game.nom.asc()).all()
+        for row in player1_rows:
+            best_scores_map[row.game_id] = row.best_score
 
-        best_scores_by_game = [
-            GameBestScoreResponse(
-                game_id=row.game_id,
-                game_name=row.game_name,
-                best_score=row.best_score
-            )
-            for row in best_scores_rows
-        ]
+        for row in player2_rows:
+            if row.game_id not in best_scores_map:
+                best_scores_map[row.game_id] = row.best_score
+            else:
+                best_scores_map[row.game_id] = max(best_scores_map[row.game_id], row.best_score)
+
+        best_scores_by_game = []
+        if best_scores_map:
+            games = self.db.query(Game).filter(
+                Game.id.in_(best_scores_map.keys()),
+                Game.is_deleted.is_(False)
+            ).all()
+
+            for game in sorted(games, key=lambda g: g.nom.lower()):
+                best_scores_by_game.append(
+                    GameBestScoreResponse(
+                        game_id=game.id,
+                        game_name=game.nom,
+                        best_score=best_scores_map[game.id]
+                    )
+                )
 
         return MyStatsResponse(
             total_games=total_games,
