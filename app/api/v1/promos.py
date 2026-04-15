@@ -1,30 +1,22 @@
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.core.messages import INVALID_PROMO_CODE
 from app.models.user import User
 from app.models.promo import PromoCode, PromoUse
 from app.api.deps import get_current_user
-from pydantic import BaseModel
+from app.schemas.promo import AvailablePromoCodeResponse, PromoCodeResponse, PromoHistoryItemResponse, UsePromoCodeRequest
 from datetime import datetime, timezone
 
 router = APIRouter()
 
-
-class UsePromoCodeRequest(BaseModel):
-    code: str
-
-
-class PromoCodeResponse(BaseModel):
-    tickets_received: int
-    new_balance: int
-    message: str
-
-
 @router.post("/use", response_model=PromoCodeResponse)
 async def use_promo_code(
         promo_data: UsePromoCodeRequest,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Utilise un code promo pour obtenir des tickets."""
 
@@ -37,7 +29,7 @@ async def use_promo_code(
     if not promo_code:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Code promo invalide"
+            detail=INVALID_PROMO_CODE
         )
 
     # Vérifier la validité du code (dates + activation)
@@ -110,10 +102,10 @@ async def use_promo_code(
     )
 
 
-@router.get("/history")
+@router.get("/history", response_model=list[PromoHistoryItemResponse])
 async def get_promo_history(
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Récupère l'historique des codes promo utilisés par l'utilisateur."""
 
@@ -136,10 +128,10 @@ async def get_promo_history(
     return history
 
 
-@router.get("/available")
+@router.get("/available", response_model=list[AvailablePromoCodeResponse])
 async def get_available_promo_codes(
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Récupère les codes promo disponibles pour l'utilisateur (non sensible)."""
 

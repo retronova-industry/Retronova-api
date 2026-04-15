@@ -1,7 +1,7 @@
 from fastapi import HTTPException, status
 from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session, aliased
-from app.api.v1.scores import ScoreResponse
+from app.schemas.score import ScoreResponse
 from app.models.arcade import Arcade
 from app.models.friend import Friendship, FriendshipStatus
 from app.models.score import Score

@@ -3,6 +3,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Optional, Annotated
 from app.core.database import get_db
+from app.core.messages import USER_NOT_FOUND
 from app.core.security import verify_firebase_token, verify_arcade_api_key
 from app.models.user import User
 
@@ -32,7 +33,7 @@ def _get_user_from_token(db: Session, credentials: HTTPAuthorizationCredentials)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Utilisateur non trouvé"
+            detail=USER_NOT_FOUND
         )
 
     return user

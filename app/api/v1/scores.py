@@ -1,46 +1,21 @@
 from fastapi import APIRouter, Depends, Query
+from typing import List, Optional, Annotated
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
-from typing import List, Optional, Annotated
+from sqlalchemy.orm import aliased
 from app.core.database import get_db
+from app.core.messages import ARCADE_NOT_FOUND, GAME_NOT_FOUND
 from app.models.user import User
 from app.models.score import Score
 from app.models.game import Game
 from app.models.arcade import Arcade
 from app.models.friend import Friendship, FriendshipStatus
 from app.services.score_service import ScoreService
+from app.schemas.score import CreateScoreRequest, ScoreResponse
 
 from app.api.deps import get_current_user, verify_arcade_key
-from pydantic import BaseModel
-from sqlalchemy.orm import aliased
 
 router = APIRouter()
-
-
-class CreateScoreRequest(BaseModel):
-    player1_id: int
-    player2_id: Optional[int] = None  # Maintenant optionnel
-    game_id: int
-    arcade_id: int
-    score_j1: int
-    score_j2: Optional[int] = None  # Optionnel pour jeu solo
-
-
-class ScoreResponse(BaseModel):
-    id: int
-    player1_pseudo: str
-    player2_pseudo: Optional[str] = None  # Peut être None
-    game_name: str
-    arcade_name: str
-    score_j1: int
-    score_j2: Optional[int] = None
-    winner_pseudo: Optional[str] = None  # Peut être None pour jeu solo
-    created_at: str
-    is_single_player: bool  # Nouveau champ
-
-    class Config:
-        from_attributes = True
-
 
 @router.post("/", response_model=ScoreResponse)
 async def create_score(
@@ -52,8 +27,8 @@ async def create_score(
 
     player1, player2 = ScoreService.validate_players(score_data, db)
 
-    game = ScoreService.get_active_entity(db, Game, score_data.game_id, "Jeu non trouvé")
-    arcade = ScoreService.get_active_entity(db, Arcade, score_data.arcade_id, "Borne d'arcade non trouvée")
+    game = ScoreService.get_active_entity(db, Game, score_data.game_id, GAME_NOT_FOUND)
+    arcade = ScoreService.get_active_entity(db, Arcade, score_data.arcade_id, ARCADE_NOT_FOUND)
 
     is_single_player = score_data.player2_id is None
     ScoreService.validate_game_mode(db, game, is_single_player)
@@ -84,13 +59,13 @@ async def create_score(
 
 @router.get("/", response_model=List[ScoreResponse])
 def get_scores(
-        game_id: Annotated[Optional[int], Query(None, description="Filtrer par jeu")] = None,
-        arcade_id: Annotated[Optional[int], Query(None, description="Filtrer par borne")] = None,
-        friends_only: Annotated[bool, Query(False, description="Afficher seulement les scores avec mes amis")] = False,
-        single_player_only: Annotated[bool, Query(False, description="Afficher seulement les scores solo")] = False,
-        limit: Annotated[int, Query(50, le=100)] = 50,
-        db: Annotated[Session, Depends(get_db)] = None,
-        current_user: Annotated[User, Depends(get_current_user)] = None
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)],
+        game_id: Annotated[Optional[int], Query(description="Filtrer par jeu")] = None,
+        arcade_id: Annotated[Optional[int], Query(description="Filtrer par borne")] = None,
+        friends_only: Annotated[bool, Query(description="Afficher seulement les scores avec mes amis")] = False,
+        single_player_only: Annotated[bool, Query(description="Afficher seulement les scores solo")] = False,
+        limit: Annotated[int, Query(le=100)] = 50,
 ):
     query = ScoreService._base_query(db)
     query = ScoreService._apply_filters(db, query, game_id, arcade_id, single_player_only)

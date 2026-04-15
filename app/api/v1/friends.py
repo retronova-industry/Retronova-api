@@ -1,35 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, and_
-from typing import List
+from typing import Annotated, List
 from app.core.database import get_db
+from app.core.messages import ALREADY_FRIENDS, FRIEND_REQUEST_ALREADY_EXISTS, USER_NOT_FOUND
 from app.models.user import User
 from app.models.friend import Friendship, FriendshipStatus
 from app.schemas.user import UserSearchResponse
 from app.api.deps import get_current_user
-from pydantic import BaseModel
+from app.schemas.friend import FriendRequestCreate, FriendshipResponse
 
 router = APIRouter()
 
-
-class FriendRequestCreate(BaseModel):
-    user_id: int
-
-
-class FriendshipResponse(BaseModel):
-    id: int
-    status: FriendshipStatus
-    requester: UserSearchResponse
-    requested: UserSearchResponse
-
-    class Config:
-        from_attributes = True
-
-
 @router.get("/", response_model=List[UserSearchResponse])
 async def get_my_friends(
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Récupère la liste des amis acceptés."""
 
@@ -54,8 +40,8 @@ async def get_my_friends(
 
 @router.get("/requests", response_model=List[FriendshipResponse])
 async def get_friend_requests(
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Récupère les demandes d'amis reçues en attente."""
 
@@ -73,8 +59,8 @@ async def get_friend_requests(
 @router.post("/request")
 async def send_friend_request(
         request_data: FriendRequestCreate,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Envoie une demande d'ami."""
 
@@ -93,7 +79,7 @@ async def send_friend_request(
     if not target_user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Utilisateur non trouvé"
+            detail=USER_NOT_FOUND
         )
 
     # Vérifier qu'il n'y a pas déjà une relation
@@ -115,12 +101,12 @@ async def send_friend_request(
         if existing_friendship.status == FriendshipStatus.ACCEPTED:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Vous êtes déjà amis"
+                detail=ALREADY_FRIENDS
             )
         elif existing_friendship.status == FriendshipStatus.PENDING:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Demande d'ami déjà en cours"
+                detail=FRIEND_REQUEST_ALREADY_EXISTS
             )
 
     # Créer la demande d'ami
@@ -137,8 +123,8 @@ async def send_friend_request(
 @router.put("/request/{friendship_id}/accept")
 async def accept_friend_request(
         friendship_id: int,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Accepte une demande d'ami."""
 
@@ -164,8 +150,8 @@ async def accept_friend_request(
 @router.put("/request/{friendship_id}/reject")
 async def reject_friend_request(
         friendship_id: int,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Rejette une demande d'ami."""
 
@@ -191,8 +177,8 @@ async def reject_friend_request(
 @router.delete("/{user_id}")
 async def remove_friend(
         user_id: int,
-        db: Session = Depends(get_db),
-        current_user: User = Depends(get_current_user)
+        db: Annotated[Session, Depends(get_db)],
+        current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Retire un ami de sa liste."""
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List, Optional
+from typing import List, Optional, Annotated
 
 from app.core.database import get_db
 from app.models.user import User
@@ -68,8 +68,8 @@ class ArcadeGameAssignmentRequest(BaseModel):
 @router.post("/arcades/")
 async def create_arcade(
         arcade_data: CreateArcadeRequest,
-        db: Session = Depends(get_db),
-        _: dict = Depends(get_current_admin)
+        db: Annotated[Session, Depends(get_db)],
+        _: Annotated[bool, Depends(get_current_admin)]
 ):
     """Crée une nouvelle borne d'arcade."""
 
@@ -245,8 +245,8 @@ async def create_promo_code(
 async def update_promo_code(
         promo_code_id: int,
         update_data: UpdatePromoCodeRequest,
-        db: Session = Depends(get_db),
-        _: dict = Depends(get_current_admin)
+        db: Annotated[Session, Depends(get_db)],
+        _: Annotated[bool, Depends(get_current_admin)]
 ):
     """Met à jour un code promo existant."""
 
