@@ -17,14 +17,14 @@ revision: str = '001'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
-
+now = sa.func.now()
 
 def upgrade() -> None:
     # Users table
     op.create_table('users',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('is_deleted', sa.Boolean(), nullable=False, default=False),
         sa.Column('firebase_uid', sa.String(), nullable=False),
@@ -45,8 +45,8 @@ def upgrade() -> None:
     # Games table
     op.create_table('games',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('is_deleted', sa.Boolean(), nullable=False, default=False),
         sa.Column('nom', sa.String(), nullable=False),
@@ -61,8 +61,8 @@ def upgrade() -> None:
     # Arcades table
     op.create_table('arcades',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('is_deleted', sa.Boolean(), nullable=False, default=False),
         sa.Column('nom', sa.String(), nullable=False),
@@ -79,8 +79,8 @@ def upgrade() -> None:
     # Arcade Games association table
     op.create_table('arcade_games',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('is_deleted', sa.Boolean(), nullable=False, default=False),
         sa.Column('arcade_id', sa.Integer(), nullable=False),
@@ -95,8 +95,8 @@ def upgrade() -> None:
     # Ticket Offers table
     op.create_table('ticket_offers',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('is_deleted', sa.Boolean(), nullable=False, default=False),
         sa.Column('tickets_amount', sa.Integer(), nullable=False),
@@ -109,8 +109,8 @@ def upgrade() -> None:
     # Ticket Purchases table
     op.create_table('ticket_purchases',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('is_deleted', sa.Boolean(), nullable=False, default=False),
         sa.Column('user_id', sa.Integer(), nullable=False),
@@ -127,8 +127,8 @@ def upgrade() -> None:
     # Friendships table
     op.create_table('friendships',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('is_deleted', sa.Boolean(), nullable=False, default=False),
         sa.Column('requester_id', sa.Integer(), nullable=False),
@@ -143,8 +143,8 @@ def upgrade() -> None:
     # Reservations table
     op.create_table('reservations',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('is_deleted', sa.Boolean(), nullable=False, default=False),
         sa.Column('player_id', sa.Integer(), nullable=False),
@@ -165,8 +165,8 @@ def upgrade() -> None:
     # Scores table
     op.create_table('scores',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('is_deleted', sa.Boolean(), nullable=False, default=False),
         sa.Column('player1_id', sa.Integer(), nullable=False),
@@ -186,8 +186,8 @@ def upgrade() -> None:
     # Promo Codes table
     op.create_table('promo_codes',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('is_deleted', sa.Boolean(), nullable=False, default=False),
         sa.Column('code', sa.String(), nullable=False),
@@ -204,8 +204,8 @@ def upgrade() -> None:
     # Promo Uses table
     op.create_table('promo_uses',
         sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
-        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=True),
+        sa.Column('created_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
+        sa.Column('updated_at', sa.DateTime(timezone=True), server_default=now, nullable=True),
         sa.Column('deleted_at', sa.DateTime(timezone=True), nullable=True),
         sa.Column('is_deleted', sa.Boolean(), nullable=False, default=False),
         sa.Column('user_id', sa.Integer(), nullable=False),

@@ -231,7 +231,7 @@ class TestAdmin:
             now_str = db.execute(text(f"SELECT {now_func}")).scalar()
             sample_user.deleted_at = datetime.strptime(now_str, "%Y-%m-%d %H:%M:%S")
         else:
-            sample_user.deleted_at = db.execute(text(f"SELECT NOW()")).scalar()
+            sample_user.deleted_at = db.execute(text("SELECT NOW()")).scalar()
         db.commit()
 
         response = client.get("/api/v1/admin/users/deleted", headers=auth_headers_admin)
@@ -251,7 +251,7 @@ class TestAdmin:
             now_str = db.execute(text(f"SELECT {now_func}")).scalar()
             sample_user.deleted_at = datetime.strptime(now_str, "%Y-%m-%d %H:%M:%S")
         else:
-            sample_user.deleted_at = db.execute(text(f"SELECT NOW()")).scalar()
+            sample_user.deleted_at = db.execute(text("SELECT NOW()")).scalar()
         db.commit()
 
 
