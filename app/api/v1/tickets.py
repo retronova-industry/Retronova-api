@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.messages import TICKET_OFFER_NOT_FOUND
 from app.models.ticket import TicketOffer, TicketPurchase
 from app.models.user import User
 from app.schemas.ticket import (
@@ -84,7 +85,7 @@ async def purchase_tickets(
     if not offer:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Offre de tickets non trouvee",
+            detail=TICKET_OFFER_NOT_FOUND
         )
 
     purchase = TicketPurchase(
