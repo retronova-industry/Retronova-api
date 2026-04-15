@@ -1,7 +1,7 @@
 from fastapi import HTTPException, status
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session, aliased
-from app.schemas.score import ScoreResponse
+from app.schemas.score import GameBestScoreResponse, MyStatsResponse, ScoreResponse
 from app.models.arcade import Arcade
 from app.models.friend import Friendship, FriendshipStatus
 from app.models.score import Score
@@ -159,4 +159,101 @@ class ScoreService:
             winner_pseudo=winner,
             is_single_player=is_single,
             created_at=score.created_at.isoformat()
+        )
+    
+    def get_my_stats(self, current_user: User) -> MyStatsResponse:
+        total_games = self.db.query(Score).filter(
+            or_(
+                Score.player1_id == current_user.id,
+                Score.player2_id == current_user.id
+            ),
+            Score.is_deleted.is_(False)
+        ).count()
+
+        solo_games = self.db.query(Score).filter(
+            Score.player1_id == current_user.id,
+            Score.player2_id.is_(None),
+            Score.is_deleted.is_(False)
+        ).count()
+
+        wins = self.db.query(Score).filter(
+            or_(
+                and_(Score.player1_id == current_user.id, Score.score_j1 > Score.score_j2),
+                and_(Score.player2_id == current_user.id, Score.score_j2 > Score.score_j1)
+            ),
+            Score.player2_id.isnot(None),
+            Score.is_deleted.is_(False)
+        ).count()
+
+        losses = self.db.query(Score).filter(
+            or_(
+                and_(Score.player1_id == current_user.id, Score.score_j1 < Score.score_j2),
+                and_(Score.player2_id == current_user.id, Score.score_j2 < Score.score_j1)
+            ),
+            Score.player2_id.isnot(None),
+            Score.is_deleted.is_(False)
+        ).count()
+
+        multi_games = total_games - solo_games
+        draws = multi_games - wins - losses
+        win_rate = (wins / multi_games * 100) if multi_games > 0 else 0.0
+
+        player1_best_scores = self.db.query(
+            Score.game_id.label("game_id"),
+            func.max(Score.score_j1).label("best_score")
+        ).filter(
+            Score.player1_id == current_user.id,
+            Score.is_deleted.is_(False)
+        ).group_by(Score.game_id).subquery()
+
+        player2_best_scores = self.db.query(
+            Score.game_id.label("game_id"),
+            func.max(Score.score_j2).label("best_score")
+        ).filter(
+            Score.player2_id == current_user.id,
+            Score.score_j2.isnot(None),
+            Score.is_deleted.is_(False)
+        ).group_by(Score.game_id).subquery()
+
+        combined_best_scores = self.db.query(
+            player1_best_scores.c.game_id,
+            player1_best_scores.c.best_score
+        ).union_all(
+            self.db.query(
+                player2_best_scores.c.game_id,
+                player2_best_scores.c.best_score
+            )
+        ).subquery()
+
+        best_scores_rows = self.db.query(
+            combined_best_scores.c.game_id,
+            Game.nom.label("game_name"),
+            func.max(combined_best_scores.c.best_score).label("best_score")
+        ).join(
+            Game, Game.id == combined_best_scores.c.game_id
+        ).filter(
+            Game.is_deleted.is_(False)
+        ).group_by(
+            combined_best_scores.c.game_id,
+            Game.nom
+        ).order_by(Game.nom.asc()).all()
+
+        best_scores_by_game = [
+            GameBestScoreResponse(
+                game_id=row.game_id,
+                game_name=row.game_name,
+                best_score=row.best_score
+            )
+            for row in best_scores_rows
+        ]
+
+        return MyStatsResponse(
+            total_games=total_games,
+            solo_games=solo_games,
+            multiplayer_games=multi_games,
+            wins=wins,
+            losses=losses,
+            draws=draws,
+            win_rate=round(win_rate, 2),
+            best_scores_by_game=best_scores_by_game
         )
