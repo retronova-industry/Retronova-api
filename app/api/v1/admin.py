@@ -18,10 +18,10 @@ router = APIRouter()
 
 class CreateArcadeRequest(BaseModel):
     nom: str
-    description: str
+    description: Optional[str] = ""
     localisation: str
-    latitude: float
-    longitude: float
+    latitude: float = 0.0
+    longitude: float = 0.0
 
 
 class CreateGameRequest(BaseModel):
@@ -91,6 +91,35 @@ async def create_arcade(
     db.refresh(arcade)
 
     return {"message": "Borne créée", "arcade_id": arcade.id, "api_key": api_key}
+
+
+@router.put("/arcades/{arcade_id}")
+async def update_arcade(
+        arcade_id: int,
+        arcade_data: CreateArcadeRequest,
+        db: Session = Depends(get_db),
+        _: dict = Depends(get_current_admin)
+):
+    """Met à jour les informations d'une borne d'arcade."""
+
+    arcade = db.query(Arcade).filter(
+        Arcade.id == arcade_id,
+        Arcade.is_deleted == False
+    ).first()
+
+    if not arcade:
+        raise HTTPException(status_code=404, detail="Borne non trouvée")
+
+    arcade.nom = arcade_data.nom
+    arcade.description = arcade_data.description
+    arcade.localisation = arcade_data.localisation
+    arcade.latitude = arcade_data.latitude
+    arcade.longitude = arcade_data.longitude
+
+    db.commit()
+    db.refresh(arcade)
+
+    return {"message": "Borne mise à jour", "arcade_id": arcade.id}
 
 
 @router.put("/arcades/{arcade_id}/games")
