@@ -9,6 +9,8 @@ from sqlalchemy.pool import StaticPool
 import tempfile
 from unittest.mock import patch, MagicMock
 import datetime
+from fastapi import HTTPException, status, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 # Ajouter le répertoire racine au PYTHONPATH
 root_dir = Path(__file__).parent.parent
@@ -19,6 +21,7 @@ if str(root_dir) not in sys.path:
 from app.main import app
 from app.core.database import get_db, Base
 from app.models import User, Game, Arcade, TicketOffer, PromoCode
+from app.api import deps
 
 # Base de données de test en mémoire
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -29,6 +32,26 @@ engine = create_engine(
     poolclass=StaticPool,
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+
+def mock_http_bearer(request: Request) -> HTTPAuthorizationCredentials:
+    """Mock HTTPBearer qui lève 403 au lieu de 401 quand pas de header."""
+    auth_header = request.headers.get("Authorization")
+    if not auth_header:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authenticated"
+        )
+
+    # Extraire le token du header "Bearer <token>"
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid authentication scheme"
+        )
+
+    token = auth_header[7:]
+    return HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
 
 
 def override_get_db():
@@ -52,6 +75,8 @@ def setup_test_db():
 def client():
     """Client de test FastAPI."""
     app.dependency_overrides[get_db] = override_get_db
+    # Override HTTPBearer pour retourner 403 au lieu de 401
+    app.dependency_overrides[deps.security] = mock_http_bearer
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
@@ -74,7 +99,13 @@ def db():
 @pytest.fixture
 def mock_firebase():
     with patch("app.api.deps.verify_firebase_token") as mock_verify:
+        mock_verify.return_value = {
+            "uid": "unauthorized_user",
+            "email": "unauth@example.com",
+            "email_verified": True
+        }
         yield mock_verify
+
 
 
 @pytest.fixture
