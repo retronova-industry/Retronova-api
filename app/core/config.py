@@ -20,9 +20,9 @@ class Settings(BaseSettings):
     ARCADE_API_KEY: str
 
     # Stripe Keys 
-    STRIPE_SECRET_KEY: str
-    STRIPE_WEBHOOK_SECRET: str
-
+    STRIPE_SECRET_KEY: Optional[str] = None
+    STRIPE_WEBHOOK_SECRET: Optional[str] = None
+        
     # Security
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
