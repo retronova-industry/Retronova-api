@@ -10,7 +10,6 @@ from app.models.game import Game
 
 
 class ScoreService:
-
     def __init__(self, db: Session):
         self.db = db
 
@@ -78,10 +77,10 @@ class ScoreService:
             return player2.pseudo
 
         return "Égalité"
-    
+
     def _base_query(self):
-        player1_alias  = aliased(User)
-        player2_alias  = aliased(User)
+        player1_alias = aliased(User)
+        player2_alias = aliased(User)
 
         return (
             self.db.query(Score, player1_alias, player2_alias, Game, Arcade)
@@ -91,7 +90,7 @@ class ScoreService:
             .join(Arcade, Score.arcade_id == Arcade.id)
             .filter(Score.is_deleted.is_(False))
         )
-    
+
     def _apply_filters(self, query, game_id, arcade_id, single_player_only):
         if game_id:
             query = query.filter(Score.game_id == game_id)
@@ -103,7 +102,7 @@ class ScoreService:
             query = query.filter(Score.player2_id.is_(None))
 
         return query
-    
+
     def _get_friend_ids(self, current_user):
         friendships = self.db.query(Friendship).filter(
             and_(
@@ -120,7 +119,23 @@ class ScoreService:
             f.requested_id if f.requester_id == current_user.id else f.requester_id
             for f in friendships
         ]
-    
+
+    def _apply_friend_filter(self, query, current_user, friend_ids):
+        return query.filter(
+            or_(
+                Score.player1_id.in_(friend_ids),
+                Score.player2_id.in_(friend_ids),
+                and_(
+                    Score.player1_id == current_user.id,
+                    Score.player2_id.in_(friend_ids)
+                ),
+                and_(
+                    Score.player2_id == current_user.id,
+                    Score.player1_id.in_(friend_ids)
+                )
+            )
+        )
+
     def _to_response(self, score, player1, player2, game, arcade):
         is_single = score.player2_id is None
 

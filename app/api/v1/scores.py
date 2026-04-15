@@ -2,20 +2,19 @@ from fastapi import APIRouter, Depends, Query
 from typing import List, Optional, Annotated
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
-from sqlalchemy.orm import aliased
+
 from app.core.database import get_db
 from app.core.messages import ARCADE_NOT_FOUND, GAME_NOT_FOUND
 from app.models.user import User
 from app.models.score import Score
 from app.models.game import Game
 from app.models.arcade import Arcade
-from app.models.friend import Friendship, FriendshipStatus
 from app.services.score_service import ScoreService
 from app.schemas.score import CreateScoreRequest, ScoreResponse
-
 from app.api.deps import get_current_user, verify_arcade_key
 
 router = APIRouter()
+
 
 @router.post("/", response_model=ScoreResponse)
 async def create_score(
@@ -25,22 +24,24 @@ async def create_score(
 ):
     """Enregistre un nouveau score."""
 
-    player1, player2 = ScoreService.validate_players(score_data, db)
+    score_service = ScoreService(db)
 
-    game = ScoreService.get_active_entity(db, Game, score_data.game_id, GAME_NOT_FOUND)
-    arcade = ScoreService.get_active_entity(db, Arcade, score_data.arcade_id, ARCADE_NOT_FOUND)
+    player1, player2 = score_service.validate_players(score_data)
+
+    game = score_service.get_active_entity(Game, score_data.game_id, GAME_NOT_FOUND)
+    arcade = score_service.get_active_entity(Arcade, score_data.arcade_id, ARCADE_NOT_FOUND)
 
     is_single_player = score_data.player2_id is None
-    ScoreService.validate_game_mode(db, game, is_single_player)
+    score_service.validate_game_mode(game, is_single_player)
 
-    score = Score(**score_data.dict())
+    score = Score(**score_data.model_dump())
 
     db.add(score)
     db.commit()
     db.refresh(score)
 
-    winner_pseudo = ScoreService.determine_winner(
-        db, score_data, player1, player2, is_single_player
+    winner_pseudo = score_service.determine_winner(
+        score_data, player1, player2, is_single_player
     )
 
     return ScoreResponse(
@@ -59,38 +60,42 @@ async def create_score(
 
 @router.get("/", response_model=List[ScoreResponse])
 def get_scores(
-        db: Annotated[Session, Depends(get_db)],
-        current_user: Annotated[User, Depends(get_current_user)],
-        game_id: Annotated[Optional[int], Query(description="Filtrer par jeu")] = None,
-        arcade_id: Annotated[Optional[int], Query(description="Filtrer par borne")] = None,
-        friends_only: Annotated[bool, Query(description="Afficher seulement les scores avec mes amis")] = False,
-        single_player_only: Annotated[bool, Query(description="Afficher seulement les scores solo")] = False,
-        limit: Annotated[int, Query(le=100)] = 50,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    game_id: Annotated[Optional[int], Query(description="Filtrer par jeu")] = None,
+    arcade_id: Annotated[Optional[int], Query(description="Filtrer par borne")] = None,
+    friends_only: Annotated[bool, Query(description="Afficher seulement les scores avec mes amis")] = False,
+    single_player_only: Annotated[bool, Query(description="Afficher seulement les scores solo")] = False,
+    limit: Annotated[int, Query(le=100)] = 50,
 ):
-    query = ScoreService._base_query(db)
-    query = ScoreService._apply_filters(db, query, game_id, arcade_id, single_player_only)
+    """Récupère la liste des scores avec filtres optionnels."""
+
+    score_service = ScoreService(db)
+
+    query = score_service._base_query()
+    query = score_service._apply_filters(query, game_id, arcade_id, single_player_only)
 
     if friends_only:
-        friend_ids = ScoreService._get_friend_ids(db, current_user)
+        friend_ids = score_service._get_friend_ids(current_user)
         if not friend_ids:
             return []
-        query = ScoreService._apply_friend_filter(query, current_user, friend_ids)
+        query = score_service._apply_friend_filter(query, current_user, friend_ids)
 
     rows = query.order_by(Score.created_at.desc()).limit(limit).all()
 
     return [
-        ScoreService._to_response(db, score, p1, p2, game, arcade)
+        score_service._to_response(score, p1, p2, game, arcade)
         for score, p1, p2, game, arcade in rows
     ]
 
+
 @router.get("/my-stats")
 async def get_my_stats(
-        db: Annotated[Session, Depends(get_db)],
-        current_user: Annotated[User, Depends(get_current_user)]
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(get_current_user)]
 ):
     """Récupère les statistiques personnelles de l'utilisateur."""
 
-    # Compter les parties jouées (solo + multi)
     total_games = db.query(Score).filter(
         or_(
             Score.player1_id == current_user.id,
@@ -99,37 +104,32 @@ async def get_my_stats(
         Score.is_deleted == False
     ).count()
 
-    # Compter les parties solo
     solo_games = db.query(Score).filter(
         Score.player1_id == current_user.id,
         Score.player2_id.is_(None),
         Score.is_deleted == False
     ).count()
 
-    # Compter les victoires (seulement pour jeux multi)
     wins = db.query(Score).filter(
         or_(
             and_(Score.player1_id == current_user.id, Score.score_j1 > Score.score_j2),
             and_(Score.player2_id == current_user.id, Score.score_j2 > Score.score_j1)
         ),
-        Score.player2_id.isnot(None),  # Seulement jeux multi
+        Score.player2_id.isnot(None),
         Score.is_deleted == False
     ).count()
 
-    # Compter les défaites (seulement pour jeux multi)
     losses = db.query(Score).filter(
         or_(
             and_(Score.player1_id == current_user.id, Score.score_j1 < Score.score_j2),
             and_(Score.player2_id == current_user.id, Score.score_j2 < Score.score_j1)
         ),
-        Score.player2_id.isnot(None),  # Seulement jeux multi
+        Score.player2_id.isnot(None),
         Score.is_deleted == False
     ).count()
 
-    # Compter les égalités (seulement pour jeux multi)
     multi_games = total_games - solo_games
     draws = multi_games - wins - losses
-
     win_rate = (wins / multi_games * 100) if multi_games > 0 else 0
 
     return {
