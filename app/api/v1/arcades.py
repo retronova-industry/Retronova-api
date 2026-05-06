@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import Annotated, List
 
-from app.api.deps import verify_arcade_key
+from app.core.security import verify_arcade_key
 from app.core.database import get_db
 from app.schemas.arcade import ArcadeResponse, QueueItemResponse
 from app.services.arcades_service import ArcadeService

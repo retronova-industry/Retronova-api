@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from typing import List, Optional, Annotated
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -11,7 +11,8 @@ from app.models.game import Game
 from app.models.arcade import Arcade
 from app.services.score_service import ScoreService
 from app.schemas.score import CreateScoreRequest, MyStatsResponse, ScoreResponse
-from app.api.deps import get_current_user, verify_arcade_key
+from app.api.deps import get_current_user
+from app.core.security import verify_arcade_key
 
 router = APIRouter()
 
@@ -20,7 +21,7 @@ router = APIRouter()
 async def create_score(
     score_data: CreateScoreRequest,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[bool, Depends(verify_arcade_key)]
+    authenticated_arcade: Annotated[Arcade, Depends(verify_arcade_key)]
 ):
     """Enregistre un nouveau score."""
 
@@ -30,6 +31,12 @@ async def create_score(
 
     game = score_service.get_active_entity(Game, score_data.game_id, GAME_NOT_FOUND)
     arcade = score_service.get_active_entity(Arcade, score_data.arcade_id, ARCADE_NOT_FOUND)
+
+    if authenticated_arcade.id != score_data.arcade_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cette clé API ne correspond pas à cette borne"
+        )
 
     is_single_player = score_data.player2_id is None
     score_service.validate_game_mode(game, is_single_player)
