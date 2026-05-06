@@ -24,18 +24,18 @@ async def create_score(
 ):
     """Enregistre un nouveau score."""
 
-    if authenticated_arcade.id != score_data.arcade_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Cette clé API ne correspond pas à cette borne"
-        )
-
     score_service = ScoreService(db)
 
     player1, player2 = score_service.validate_players(score_data)
 
     game = score_service.get_active_entity(Game, score_data.game_id, GAME_NOT_FOUND)
     arcade = score_service.get_active_entity(Arcade, score_data.arcade_id, ARCADE_NOT_FOUND)
+
+    if authenticated_arcade.id != score_data.arcade_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cette clé API ne correspond pas à cette borne"
+        )
 
     is_single_player = score_data.player2_id is None
     score_service.validate_game_mode(game, is_single_player)

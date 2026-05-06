@@ -233,6 +233,5 @@ def auth_headers_admin(mock_firebase, sample_admin_user):
 
 
 @pytest.fixture
-def arcade_api_headers():
-    """Headers API pour les bornes d'arcade."""
-    return {"X-API-Key": "arcade-super-secret-api-key-change-this-in-production"}
+def arcade_api_headers(sample_arcade):
+    return {"X-API-Key": sample_arcade.api_key}
