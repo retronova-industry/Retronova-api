@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from typing import List, Optional, Annotated
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
@@ -20,9 +20,15 @@ router = APIRouter()
 async def create_score(
     score_data: CreateScoreRequest,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[bool, Depends(verify_arcade_key)]
+    authenticated_arcade: Annotated[Arcade, Depends(verify_arcade_key)]
 ):
     """Enregistre un nouveau score."""
+
+    if authenticated_arcade.id != score_data.arcade_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cette clé API ne correspond pas à cette borne"
+        )
 
     score_service = ScoreService(db)
 

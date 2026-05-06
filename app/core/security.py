@@ -1,5 +1,4 @@
-from alembic.util import status
-from fastapi import Depends, HTTPException, Header
+from fastapi import Depends, HTTPException, Header, status
 import firebase_admin
 from firebase_admin import credentials, auth
 from sqlalchemy.orm import Session

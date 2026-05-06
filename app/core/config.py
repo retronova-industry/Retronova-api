@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     FIREBASE_USER_CREDENTIALS_PATH: str
     FIREBASE_ADMIN_CREDENTIALS_PATH: str
 
+    # Stripe Keys 
+    STRIPE_SECRET_KEY: Optional[str] = None
+    STRIPE_WEBHOOK_SECRET: Optional[str] = None
+
     # Arcade API Key
     ARCADE_API_KEY: str
 
