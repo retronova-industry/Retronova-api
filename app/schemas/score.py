@@ -25,3 +25,20 @@ class ScoreResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class GameBestScoreResponse(BaseModel):
+    game_id: int
+    game_name: str
+    best_score: int
+
+
+class MyStatsResponse(BaseModel):
+    total_games: int
+    solo_games: int
+    multiplayer_games: int
+    wins: int
+    losses: int
+    draws: int
+    win_rate: float
+    best_scores_by_game: list[GameBestScoreResponse]
