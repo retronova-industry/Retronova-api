@@ -11,7 +11,8 @@ from app.models.game import Game
 from app.models.arcade import Arcade
 from app.services.score_service import ScoreService
 from app.schemas.score import CreateScoreRequest, MyStatsResponse, ScoreResponse
-from app.api.deps import get_current_user, verify_arcade_key
+from app.api.deps import get_current_user
+from app.core.security import verify_arcade_key
 
 router = APIRouter()
 

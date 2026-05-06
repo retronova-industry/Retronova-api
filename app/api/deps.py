@@ -55,33 +55,6 @@ def get_current_admin(
 
     return token_data
 
-
-def verify_arcade_key(
-    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
-    db: Session = Depends(get_db)
-) -> Arcade:
-    """Vérifie la clé API d'une borne et retourne la borne associée."""
-
-    if not x_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Clé API borne invalide"
-        )
-
-    arcade = db.query(Arcade).filter(
-        Arcade.api_key == x_api_key,
-        Arcade.is_deleted.is_(False)
-    ).first()
-
-    if not arcade:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Clé API borne invalide"
-        )
-
-    return arcade
-
-
 def get_optional_user(
         db: Session = Depends(get_db),
         credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)
