@@ -9,7 +9,7 @@ from app.core.config import settings
 from app.core.security import init_firebase
 from app.core.rate_limit import limiter
 
-from app.api.v1 import auth, users, friends, tickets, games, arcades, reservations, scores, promos, admin
+from app.api.v1 import auth, users, friends, tickets, games, arcades, reservations, scores, promos, admin, payments
 
 # Initialisation Firebase
 init_firebase()
@@ -46,6 +46,7 @@ app.include_router(reservations.router, prefix="/api/v1/reservations", tags=["re
 app.include_router(scores.router, prefix="/api/v1/scores", tags=["scores"])
 app.include_router(promos.router, prefix="/api/v1/promos", tags=["promos"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+app.include_router(payments.router, prefix="/api/v1/payments", tags=["payments"])
 
 
 @app.get("/")

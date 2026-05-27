@@ -19,6 +19,8 @@ class TicketPurchase(BaseModel):
     tickets_received = Column(Integer, nullable=False)
     amount_paid = Column(Float, nullable=False)
     stripe_payment_id = Column(String, nullable=True)  # Pour plus tard
+    stripe_session_id = Column(String, nullable=True, index=True)
+    payment_status = Column(String, default="paid", nullable=False)
 
     # Relations
     user = relationship("User", back_populates="ticket_purchases")
