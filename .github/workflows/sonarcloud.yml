@@ -2,8 +2,6 @@ name: SonarCloud
 
 on:
   push:
-    branches:
-      - master
   pull_request:
 
 jobs:
@@ -21,6 +19,9 @@ jobs:
         run: pip install tox
       - name: Run tox
         run: tox -e py
+
+      - name: Run tests with coverage
+        run: pytest --cov=app --cov-report=xml
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@a31c9398be7ace6bbfaf30c0bd5d415f843d45e9
