@@ -7,7 +7,6 @@ from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.ticket import (
-    CheckoutSessionResponse,
     PurchaseStatusResponse,
     PurchaseTicketsRequest,
     TicketOfferResponse,
@@ -30,7 +29,7 @@ async def get_ticket_offers(
     return get_ticket_offers_service(db)
 
 
-@router.post("/purchase", response_model=CheckoutSessionResponse)
+@router.post("/purchase")
 async def purchase_tickets(
     purchase_data: PurchaseTicketsRequest,
     db: Annotated[Session, Depends(get_db)],

@@ -8,6 +8,7 @@ from app.models.user import User
 from app.schemas.ticket import (
     CheckoutSessionResponse,
     PaymentConfigResponse,
+    PurchaseResponse,
     PurchaseStatusResponse,
 )
 
@@ -25,7 +26,7 @@ def purchase_tickets_service(
     db: Session,
     current_user: User,
     offer_id: int
-) -> CheckoutSessionResponse:
+) -> CheckoutSessionResponse | PurchaseResponse:
     offer = db.query(TicketOffer).filter(
         TicketOffer.id == offer_id,
         TicketOffer.is_deleted == False
@@ -34,14 +35,11 @@ def purchase_tickets_service(
     if not offer:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Offre de tickets non trouvee"
+            detail="Offre de tickets non trouv\u00e9e"
         )
 
-    if not settings.STRIPE_SECRET_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Stripe n'est pas configure"
-        )
+    if not _has_stripe_secret_key():
+        return _purchase_tickets_mock(db, current_user, offer)
 
     purchase = TicketPurchase(
         user_id=current_user.id,
@@ -89,11 +87,43 @@ def purchase_tickets_service(
     )
 
 
+def _purchase_tickets_mock(
+    db: Session,
+    current_user: User,
+    offer: TicketOffer,
+) -> PurchaseResponse:
+    purchase = TicketPurchase(
+        user_id=current_user.id,
+        offer_id=offer.id,
+        tickets_received=offer.tickets_amount,
+        amount_paid=offer.price_euros,
+        stripe_payment_id=f"mock_payment_{current_user.id}_{offer.id}",
+        payment_status="paid",
+    )
+    db.add(purchase)
+
+    current_user.tickets_balance += offer.tickets_amount
+    db.commit()
+
+    return PurchaseResponse(
+        tickets_received=offer.tickets_amount,
+        amount_paid=offer.price_euros,
+        new_balance=current_user.tickets_balance,
+    )
+
+
 def get_payment_config_service() -> PaymentConfigResponse:
     return PaymentConfigResponse(
         publishable_key=settings.STRIPE_PUBLISHABLE_KEY or "",
         currency="eur",
         checkout_mode="redirect",
+    )
+
+
+def _has_stripe_secret_key() -> bool:
+    return bool(
+        settings.STRIPE_SECRET_KEY
+        and settings.STRIPE_SECRET_KEY.strip().startswith("sk_")
     )
 
 
