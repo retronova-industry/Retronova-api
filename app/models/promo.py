@@ -19,9 +19,11 @@ class PromoCode(BaseModel):
     valid_from = Column(DateTime(timezone=True), nullable=True)  # Date de début de validité
     valid_until = Column(DateTime(timezone=True), nullable=True)  # Date d'expiration
     is_active = Column(Boolean, default=True, nullable=False)  # Activation manuelle
+    arcade_id = Column(Integer, ForeignKey("arcades.id", ondelete="SET NULL"), nullable=True)
 
     # Relations
     promo_uses = relationship("PromoUse", back_populates="promo_code")
+    arcade = relationship("Arcade", foreign_keys=[arcade_id])
 
     def is_valid_now(self) -> bool:
         """Vérifie si le code promo est valide à l'instant présent."""

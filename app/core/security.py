@@ -69,6 +69,27 @@ def verify_firebase_token(token: str, app_type: str = "user") -> Optional[dict]:
         return None
 
 
+def create_firebase_admin_user(email: str) -> str:
+    """Crée un utilisateur dans le projet Firebase admin et retourne son UID."""
+    user = auth.create_user(email=email, app=firebase_admin_app)
+    return user.uid
+
+
+def generate_password_reset_link(email: str) -> str:
+    """Génère un lien de réinitialisation de mot de passe Firebase pour l'app admin."""
+    return auth.generate_password_reset_link(email, app=firebase_admin_app)
+
+
+def set_admin_custom_claims(uid: str, role: str) -> None:
+    """Pose les custom claims Firebase sur un compte admin.
+
+    Le rôle est posé sur le token. La liste des arcades possédées par un
+    arcade_owner est récupérée dynamiquement via GET /admin/me, pour éviter
+    d'avoir à régénérer le token à chaque changement d'assignation.
+    """
+    auth.set_custom_user_claims(uid, {"role": role}, app=firebase_admin_app)
+
+
 def verify_arcade_api_key(api_key: str) -> bool:
     """Vérifie la clé API des bornes d'arcade."""
     return api_key == settings.ARCADE_API_KEY

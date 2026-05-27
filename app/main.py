@@ -1,16 +1,24 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.security import init_firebase
+from app.core.bootstrap import bootstrap_super_admin
 from app.api.v1 import auth, users, friends, tickets, games, arcades, reservations, scores, promos, admin
 
-# Initialisation Firebase
-init_firebase()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_firebase()
+    bootstrap_super_admin()
+    yield
+
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.VERSION,
-    debug=settings.DEBUG
+    debug=settings.DEBUG,
+    lifespan=lifespan
 )
 
 # CORS
