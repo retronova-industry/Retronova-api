@@ -13,11 +13,13 @@ class Arcade(BaseModel):
     localisation = Column(String, nullable=False)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
+    owner_admin_id = Column(Integer, ForeignKey("admins.id", ondelete="SET NULL"), nullable=True)
 
     # Relations
     arcade_games = relationship("ArcadeGame", back_populates="arcade")
     reservations = relationship("Reservation", back_populates="arcade")
     scores = relationship("Score", back_populates="arcade")
+    owner_admin = relationship("Admin", back_populates="arcades", foreign_keys=[owner_admin_id])
 
 
 class ArcadeGame(BaseModel):

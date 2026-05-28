@@ -7,6 +7,8 @@ from .score import Score
 from .ticket import TicketOffer, TicketPurchase
 from .friend import Friendship, FriendshipStatus
 from .promo import PromoCode, PromoUse
+from .admin import Admin, AdminRole
+from .arcade_request import ArcadeCreationRequest, ArcadeRequestStatus
 
 __all__ = [
     "BaseModel",
@@ -22,5 +24,9 @@ __all__ = [
     "Friendship",
     "FriendshipStatus",
     "PromoCode",
-    "PromoUse"
+    "PromoUse",
+    "Admin",
+    "AdminRole",
+    "ArcadeCreationRequest",
+    "ArcadeRequestStatus",
 ]
