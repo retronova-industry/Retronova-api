@@ -16,6 +16,7 @@ email-validator>=2.1.0
 # Utilitaires web
 python-multipart
 python-dotenv
+stripe>=8.0.0
 
 # Email
 resend>=2.0.0
@@ -25,6 +26,7 @@ firebase-admin
 bcrypt
 python-jose[cryptography]
 passlib[bcrypt]
+slowapi
 
 # Tests avec versions compatibles
 pytest>=7.4.0

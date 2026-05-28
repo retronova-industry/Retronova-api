@@ -8,6 +8,7 @@ class Arcade(BaseModel):
 
     nom = Column(String, nullable=False)
     description = Column(String)
+    arcade_image = Column(String, nullable=True)
     api_key = Column(String, unique=True, nullable=False)
     localisation = Column(String, nullable=False)
     latitude = Column(Float, nullable=False)

@@ -1,0 +1,916 @@
+from datetime import datetime, timezone, timedelta
+import secrets
+
+from fastapi import HTTPException, status
+from sqlalchemy import func
+from sqlalchemy.orm import Session
+
+from app.core.messages import (
+    ARCADE_NOT_FOUND,
+    GAME_NOT_FOUND,
+    PROMO_CODE_NOT_FOUND,
+    USER_NOT_FOUND,
+)
+from app.models.arcade import Arcade, ArcadeGame
+from app.models.game import Game
+from app.models.promo import PromoCode
+from app.models.ticket import TicketOffer
+from app.models.user import User
+from app.schemas.admin import (
+    ArcadeGameAssignmentRequest,
+    CreateArcadeRequest,
+    CreateGameRequest,
+    CreatePromoCodeRequest,
+    UpdatePromoCodeRequest,
+    UpdateUserTicketsRequest,
+)
+
+
+def generate_unique_arcade_api_key(db: Session) -> str:
+    """Génère une clé API unique pour une borne."""
+    new_api_key = f"arcade_key_{secrets.token_urlsafe(16)}"
+    while db.query(Arcade).filter(Arcade.api_key == new_api_key).first():
+        new_api_key = f"arcade_key_{secrets.token_urlsafe(16)}"
+    return new_api_key
+
+
+# === GESTION DES BORNES ===
+
+def create_arcade_service(
+    db: Session,
+    arcade_data: CreateArcadeRequest,
+) -> dict:
+    """Crée une nouvelle borne d'arcade."""
+    api_key = generate_unique_arcade_api_key(db)
+
+    arcade = Arcade(
+        nom=arcade_data.nom,
+        description=arcade_data.description,
+        arcade_image=arcade_data.arcade_image,
+        api_key=api_key,
+        localisation=arcade_data.localisation,
+        latitude=arcade_data.latitude,
+        longitude=arcade_data.longitude,
+    )
+
+    db.add(arcade)
+    db.commit()
+    db.refresh(arcade)
+
+    return {
+        "message": "Borne créée",
+        "arcade_id": arcade.id,
+        "api_key": api_key,
+    }
+
+
+def update_arcade_service(
+    db: Session,
+    arcade_id: int,
+    arcade_data: CreateArcadeRequest,
+) -> dict:
+    """Met à jour les informations d'une borne d'arcade."""
+    arcade = db.query(Arcade).filter(
+        Arcade.id == arcade_id,
+        Arcade.is_deleted.is_(False),
+    ).first()
+
+    if not arcade:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Borne non trouvée",
+        )
+
+    arcade.nom = arcade_data.nom
+    arcade.description = arcade_data.description
+    arcade.arcade_image = arcade_data.arcade_image
+    arcade.localisation = arcade_data.localisation
+    arcade.latitude = arcade_data.latitude
+    arcade.longitude = arcade_data.longitude
+
+    db.commit()
+    db.refresh(arcade)
+
+    return {
+        "message": "Borne mise à jour",
+        "arcade_id": arcade.id,
+    }
+
+
+def assign_game_to_arcade_service(
+    db: Session,
+    arcade_id: int,
+    assignment: ArcadeGameAssignmentRequest,
+) -> dict:
+    """Assigne un jeu à une borne sur un slot spécifique."""
+    if assignment.arcade_id != arcade_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="L'arcade_id du body doit correspondre à celui de l'URL",
+        )
+
+    arcade = db.query(Arcade).filter(
+        Arcade.id == assignment.arcade_id,
+        Arcade.is_deleted.is_(False),
+    ).first()
+    if not arcade:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Borne non trouvée",
+        )
+
+    game = db.query(Game).filter(
+        Game.id == assignment.game_id,
+        Game.is_deleted.is_(False),
+    ).first()
+    if not game:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Jeu non trouvé",
+        )
+
+    if assignment.slot_number not in (1, 2):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Le slot doit être 1 ou 2",
+        )
+
+    existing = db.query(ArcadeGame).filter(
+        ArcadeGame.arcade_id == assignment.arcade_id,
+        ArcadeGame.slot_number == assignment.slot_number,
+    ).first()
+
+    if existing:
+        db.delete(existing)
+
+    arcade_game = ArcadeGame(
+        arcade_id=assignment.arcade_id,
+        game_id=assignment.game_id,
+        slot_number=assignment.slot_number,
+    )
+
+    db.add(arcade_game)
+    db.commit()
+
+    return {
+        "message": f"Jeu {game.nom} assigné au slot {assignment.slot_number} de la borne {arcade.nom}"
+    }
+
+
+def soft_delete_arcade_service(
+    db: Session,
+    arcade_id: int,
+) -> dict:
+    """Supprime une borne d'arcade (soft delete)."""
+    from app.models.reservation import Reservation, ReservationStatus
+
+    arcade = db.query(Arcade).filter(
+        Arcade.id == arcade_id,
+        Arcade.is_deleted.is_(False),
+    ).first()
+
+    if not arcade:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=ARCADE_NOT_FOUND,
+        )
+
+    active_reservations = db.query(Reservation).filter(
+        Reservation.arcade_id == arcade_id,
+        Reservation.status.in_([ReservationStatus.WAITING, ReservationStatus.PLAYING]),
+        Reservation.is_deleted.is_(False),
+    ).count()
+
+    if active_reservations > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Impossible de supprimer la borne : {active_reservations} réservation(s) active(s)",
+        )
+
+    now = datetime.now(timezone.utc)
+    arcade.is_deleted = True
+    arcade.deleted_at = now
+
+    arcade_games = db.query(ArcadeGame).filter(
+        ArcadeGame.arcade_id == arcade_id,
+        ArcadeGame.is_deleted.is_(False),
+    ).all()
+
+    for ag in arcade_games:
+        ag.is_deleted = True
+        ag.deleted_at = now
+
+    db.commit()
+
+    return {
+        "message": f"Borne '{arcade.nom}' supprimée avec succès",
+        "arcade_id": arcade.id,
+        "deleted_associations": len(arcade_games),
+    }
+
+
+def list_deleted_arcades_service(db: Session):
+    """Liste les bornes d'arcade supprimées (soft delete)."""
+    return db.query(Arcade).filter(
+        Arcade.is_deleted.is_(True)
+    ).order_by(Arcade.deleted_at.desc()).all()
+
+
+def restore_arcade_service(
+    db: Session,
+    arcade_id: int,
+) -> dict:
+    """Restaure une borne d'arcade supprimée."""
+    arcade = db.query(Arcade).filter(Arcade.id == arcade_id).first()
+
+    if not arcade:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Borne d'arcade non trouvée",
+        )
+
+    if not arcade.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cette borne n'est pas supprimée",
+        )
+
+    existing_api_key = db.query(Arcade).filter(
+        Arcade.api_key == arcade.api_key,
+        Arcade.is_deleted.is_(False),
+        Arcade.id != arcade_id,
+    ).first()
+
+    if existing_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "La clé API de cette borne est maintenant utilisée par une autre borne. "
+                "Veuillez générer une nouvelle clé API."
+            ),
+        )
+
+    arcade.is_deleted = False
+    arcade.deleted_at = None
+
+    arcade_games = db.query(ArcadeGame).filter(
+        ArcadeGame.arcade_id == arcade_id,
+        ArcadeGame.is_deleted.is_(True),
+    ).all()
+
+    restored_associations = 0
+    for ag in arcade_games:
+        game_exists = db.query(Game).filter(
+            Game.id == ag.game_id,
+            Game.is_deleted.is_(False),
+        ).first()
+
+        if game_exists:
+            slot_conflict = db.query(ArcadeGame).filter(
+                ArcadeGame.arcade_id == arcade_id,
+                ArcadeGame.slot_number == ag.slot_number,
+                ArcadeGame.is_deleted.is_(False),
+                ArcadeGame.id != ag.id,
+            ).first()
+
+            if not slot_conflict:
+                ag.is_deleted = False
+                ag.deleted_at = None
+                restored_associations += 1
+
+    db.commit()
+
+    return {
+        "message": f"Borne '{arcade.nom}' restaurée avec succès",
+        "arcade_id": arcade.id,
+        "restored_associations": restored_associations,
+        "note": (
+            f"{len(arcade_games) - restored_associations} association(s) non restaurée(s) en raison de conflits"
+            if restored_associations < len(arcade_games)
+            else None
+        ),
+    }
+
+
+def regenerate_arcade_api_key_service(
+    db: Session,
+    arcade_id: int,
+) -> dict:
+    """Régénère la clé API d'une borne d'arcade."""
+    arcade = db.query(Arcade).filter(
+        Arcade.id == arcade_id
+    ).first()
+
+    if not arcade:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Borne d'arcade non trouvée",
+        )
+
+    old_api_key = arcade.api_key
+    new_api_key = generate_unique_arcade_api_key(db)
+
+    arcade.api_key = new_api_key
+    db.commit()
+
+    return {
+        "message": f"Clé API de la borne '{arcade.nom}' régénérée",
+        "arcade_id": arcade.id,
+        "old_api_key": old_api_key[:20] + "...",
+        "new_api_key": new_api_key,
+    }
+
+
+# === GESTION DES JEUX ===
+
+def create_game_service(
+    db: Session,
+    game_data: CreateGameRequest,
+) -> dict:
+    """Crée un nouveau jeu."""
+    game = Game(
+        nom=game_data.nom,
+        description=game_data.description,
+        game_image=game_data.game_image,
+        min_players=game_data.min_players,
+        max_players=game_data.max_players,
+        ticket_cost=game_data.ticket_cost,
+    )
+
+    db.add(game)
+    db.commit()
+    db.refresh(game)
+
+    return {
+        "message": "Jeu créé",
+        "game_id": game.id,
+    }
+
+
+def soft_delete_game_service(
+    db: Session,
+    game_id: int,
+) -> dict:
+    """Supprime un jeu (soft delete)."""
+    game = db.query(Game).filter(
+        Game.id == game_id,
+        Game.is_deleted == False
+    ).first()
+
+    if not game:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Jeu non trouvé"
+        )
+
+    from app.models.reservation import Reservation, ReservationStatus
+    active_reservations = db.query(Reservation).filter(
+        Reservation.game_id == game_id,
+        Reservation.status.in_([ReservationStatus.WAITING, ReservationStatus.PLAYING]),
+        Reservation.is_deleted == False
+    ).count()
+
+    if active_reservations > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Impossible de supprimer le jeu : {active_reservations} réservation(s) active(s)"
+        )
+
+    now = datetime.now(timezone.utc)
+
+    game.is_deleted = True
+    game.deleted_at = now
+
+    arcade_games = db.query(ArcadeGame).filter(
+        ArcadeGame.game_id == game_id,
+        ArcadeGame.is_deleted == False
+    ).all()
+
+    for ag in arcade_games:
+        ag.is_deleted = True
+        ag.deleted_at = now
+
+    db.commit()
+
+    return {
+        "message": f"Jeu '{game.nom}' supprimé avec succès",
+        "game_id": game.id,
+        "deleted_associations": len(arcade_games)
+    }
+
+
+# === GESTION DES CODES PROMO ===
+
+def create_promo_code_service(
+    db: Session,
+    promo_data: CreatePromoCodeRequest,
+) -> dict:
+    """Crée un nouveau code promo avec gestion des dates."""
+    if promo_data.valid_from and promo_data.valid_until:
+        if promo_data.valid_until <= promo_data.valid_from:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La date d'expiration doit être après la date de début",
+            )
+
+    existing = db.query(PromoCode).filter(
+        PromoCode.code == promo_data.code.upper().strip()
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Ce code promo existe déjà",
+        )
+
+    promo_code = PromoCode(
+        code=promo_data.code.upper().strip(),
+        tickets_reward=promo_data.tickets_reward,
+        is_single_use_global=promo_data.is_single_use_global,
+        is_single_use_per_user=promo_data.is_single_use_per_user,
+        usage_limit=promo_data.usage_limit,
+        valid_from=promo_data.valid_from,
+        valid_until=promo_data.valid_until,
+        is_active=promo_data.is_active,
+    )
+
+    db.add(promo_code)
+    db.commit()
+    db.refresh(promo_code)
+
+    return {
+        "message": "Code promo créé",
+        "promo_code_id": promo_code.id,
+        "is_valid_now": promo_code.is_valid_now(),
+        "days_until_expiry": promo_code.days_until_expiry(),
+    }
+
+
+def update_promo_code_service(
+    db: Session,
+    promo_code_id: int,
+    update_data: UpdatePromoCodeRequest,
+) -> dict:
+    """Met à jour un code promo existant."""
+    promo_code = db.query(PromoCode).filter(
+        PromoCode.id == promo_code_id,
+        PromoCode.is_deleted.is_(False),
+    ).first()
+
+    if not promo_code:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Code promo non trouvé",
+        )
+
+    valid_from = (
+        update_data.valid_from
+        if update_data.valid_from is not None
+        else promo_code.valid_from
+    )
+    valid_until = (
+        update_data.valid_until
+        if update_data.valid_until is not None
+        else promo_code.valid_until
+    )
+
+    if valid_from and valid_until and valid_until <= valid_from:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La date d'expiration doit être après la date de début",
+        )
+
+    update_dict = update_data.model_dump(exclude_unset=True)
+    for field, value in update_dict.items():
+        setattr(promo_code, field, value)
+
+    db.commit()
+    db.refresh(promo_code)
+
+    return {
+        "message": "Code promo mis à jour",
+        "promo_code_id": promo_code.id,
+        "is_valid_now": promo_code.is_valid_now(),
+        "days_until_expiry": promo_code.days_until_expiry(),
+    }
+
+
+def list_promo_codes_service(
+    db: Session,
+    include_expired: bool = False,
+) -> list[dict]:
+    """Liste tous les codes promo avec filtrage optionnel."""
+    query = db.query(PromoCode).filter(PromoCode.is_deleted.is_(False))
+
+    if not include_expired:
+        now = datetime.now(timezone.utc)
+        query = query.filter(
+            PromoCode.valid_until.is_(None) | (PromoCode.valid_until > now)
+        )
+
+    promo_codes = query.order_by(PromoCode.created_at.desc()).all()
+
+    result = []
+    for promo in promo_codes:
+        result.append(
+            {
+                "id": promo.id,
+                "code": promo.code,
+                "tickets_reward": promo.tickets_reward,
+                "usage_limit": promo.usage_limit,
+                "current_uses": promo.current_uses,
+                "is_single_use_global": promo.is_single_use_global,
+                "is_single_use_per_user": promo.is_single_use_per_user,
+                "valid_from": promo.valid_from.isoformat() if promo.valid_from else None,
+                "valid_until": promo.valid_until.isoformat() if promo.valid_until else None,
+                "is_active": promo.is_active,
+                "is_valid_now": promo.is_valid_now(),
+                "is_expired": promo.is_expired(),
+                "days_until_expiry": promo.days_until_expiry(),
+                "created_at": promo.created_at.isoformat(),
+            }
+        )
+
+    return result
+
+
+def toggle_promo_code_active_service(
+    db: Session,
+    promo_code_id: int,
+) -> dict:
+    """Active/désactive manuellement un code promo."""
+    promo_code = db.query(PromoCode).filter(
+        PromoCode.id == promo_code_id,
+        PromoCode.is_deleted.is_(False),
+    ).first()
+
+    if not promo_code:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Code promo non trouvé",
+        )
+
+    promo_code.is_active = not promo_code.is_active
+    db.commit()
+
+    return {
+        "message": f"Code promo {'activé' if promo_code.is_active else 'désactivé'}",
+        "promo_code_id": promo_code.id,
+        "is_active": promo_code.is_active,
+        "is_valid_now": promo_code.is_valid_now(),
+    }
+
+
+def get_expiring_promo_codes_service(
+    db: Session,
+    days_ahead: int = 7,
+) -> dict:
+    """Récupère les codes promo qui expirent bientôt."""
+    now = datetime.now(timezone.utc)
+    future_date = now + timedelta(days=days_ahead)
+
+    expiring_codes = db.query(PromoCode).filter(
+        PromoCode.is_deleted.is_(False),
+        PromoCode.is_active.is_(True),
+        PromoCode.valid_until.isnot(None),
+        PromoCode.valid_until <= future_date,
+        PromoCode.valid_until > now,
+    ).order_by(PromoCode.valid_until).all()
+
+    result = []
+    for promo in expiring_codes:
+        result.append(
+            {
+                "id": promo.id,
+                "code": promo.code,
+                "tickets_reward": promo.tickets_reward,
+                "valid_until": promo.valid_until.isoformat(),
+                "days_until_expiry": promo.days_until_expiry(),
+                "current_uses": promo.current_uses,
+                "usage_limit": promo.usage_limit,
+            }
+        )
+
+    return {
+        "expiring_codes": result,
+        "total_count": len(result),
+        "days_ahead": days_ahead,
+    }
+
+
+# === GESTION DES UTILISATEURS ===
+
+def update_user_tickets_service(
+    db: Session,
+    update_data: UpdateUserTicketsRequest,
+) -> dict:
+    """Ajoute ou retire des tickets à un utilisateur."""
+    user = db.query(User).filter(
+        User.id == update_data.user_id,
+        User.is_deleted.is_(False),
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=USER_NOT_FOUND,
+        )
+
+    old_balance = user.tickets_balance
+    user.tickets_balance += update_data.tickets_to_add
+
+    if user.tickets_balance < 0:
+        user.tickets_balance = 0
+
+    db.commit()
+
+    return {
+        "message": f"Solde mis à jour pour {user.pseudo}",
+        "old_balance": old_balance,
+        "new_balance": user.tickets_balance,
+        "tickets_added": update_data.tickets_to_add,
+    }
+
+
+def list_deleted_users_service(db: Session):
+    """Liste les utilisateurs supprimés (soft delete)."""
+    return db.query(User).filter(
+        User.is_deleted.is_(True)
+    ).all()
+
+
+def restore_user_service(
+    db: Session,
+    user_id: int,
+) -> dict:
+    """Restaure un utilisateur supprimé."""
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=USER_NOT_FOUND,
+        )
+
+    if not user.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cet utilisateur n'est pas supprimé",
+        )
+
+    user.is_deleted = False
+    user.deleted_at = None
+    db.commit()
+
+    return {"message": f"Utilisateur {user.pseudo} restauré"}
+
+
+def soft_delete_user_service(
+    db: Session,
+    user_id: int,
+) -> dict:
+    """Supprime un utilisateur (soft delete) - Accès admin uniquement."""
+    user = db.query(User).filter(
+        User.id == user_id,
+        User.is_deleted.is_(False),
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=USER_NOT_FOUND,
+        )
+
+    from app.models.friend import Friendship
+    from app.models.promo import PromoUse
+    from app.models.reservation import Reservation, ReservationStatus
+    from app.models.ticket import TicketPurchase
+
+    active_reservations = db.query(Reservation).filter(
+        (Reservation.player_id == user_id) | (Reservation.player2_id == user_id),
+        Reservation.status.in_([ReservationStatus.WAITING, ReservationStatus.PLAYING]),
+        Reservation.is_deleted.is_(False),
+    ).count()
+
+    if active_reservations > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Impossible de supprimer l'utilisateur : {active_reservations} réservation(s) active(s). "
+                "Veuillez d'abord gérer les réservations en cours."
+            ),
+        )
+
+    now = datetime.now(timezone.utc)
+
+    user.is_deleted = True
+    user.deleted_at = now
+
+    friendships = db.query(Friendship).filter(
+        (Friendship.requester_id == user_id) | (Friendship.requested_id == user_id),
+        Friendship.is_deleted.is_(False),
+    ).all()
+
+    deleted_friendships = 0
+    for friendship in friendships:
+        friendship.is_deleted = True
+        friendship.deleted_at = now
+        deleted_friendships += 1
+
+    promo_uses = db.query(PromoUse).filter(
+        PromoUse.user_id == user_id,
+        PromoUse.is_deleted.is_(False),
+    ).all()
+
+    deleted_promo_uses = 0
+    for promo_use in promo_uses:
+        promo_use.is_deleted = True
+        promo_use.deleted_at = now
+        deleted_promo_uses += 1
+
+    ticket_purchases = db.query(TicketPurchase).filter(
+        TicketPurchase.user_id == user_id,
+        TicketPurchase.is_deleted.is_(False),
+    ).all()
+
+    deleted_purchases = 0
+    for purchase in ticket_purchases:
+        purchase.is_deleted = True
+        purchase.deleted_at = now
+        deleted_purchases += 1
+
+    db.commit()
+
+    return {
+        "message": f"Utilisateur '{user.pseudo}' supprimé avec succès",
+        "user_id": user.id,
+        "deleted_friendships": deleted_friendships,
+        "deleted_promo_uses": deleted_promo_uses,
+        "deleted_purchases": deleted_purchases,
+        "note": "Les scores sont conservés de manière anonymisée pour l'intégrité des données de jeu",
+    }
+
+
+def get_user_deletion_impact_service(
+    db: Session,
+    user_id: int,
+) -> dict:
+    """Analyse l'impact de la suppression d'un utilisateur avant de la confirmer."""
+    from app.models.friend import Friendship
+    from app.models.promo import PromoUse
+    from app.models.reservation import Reservation, ReservationStatus
+    from app.models.score import Score
+    from app.models.ticket import TicketPurchase
+
+    user = db.query(User).filter(
+        User.id == user_id,
+        User.is_deleted.is_(False),
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Utilisateur non trouvé",
+        )
+
+    active_reservations = db.query(Reservation).filter(
+        (Reservation.player_id == user_id) | (Reservation.player2_id == user_id),
+        Reservation.status.in_([ReservationStatus.WAITING, ReservationStatus.PLAYING]),
+        Reservation.is_deleted.is_(False),
+    ).count()
+
+    completed_reservations = db.query(Reservation).filter(
+        (Reservation.player_id == user_id) | (Reservation.player2_id == user_id),
+        Reservation.status.in_([ReservationStatus.COMPLETED, ReservationStatus.CANCELLED]),
+        Reservation.is_deleted.is_(False),
+    ).count()
+
+    friendships_count = db.query(Friendship).filter(
+        (Friendship.requester_id == user_id) | (Friendship.requested_id == user_id),
+        Friendship.is_deleted.is_(False),
+    ).count()
+
+    promo_uses_count = db.query(PromoUse).filter(
+        PromoUse.user_id == user_id,
+        PromoUse.is_deleted.is_(False),
+    ).count()
+
+    purchases_count = db.query(TicketPurchase).filter(
+        TicketPurchase.user_id == user_id,
+        TicketPurchase.is_deleted.is_(False),
+    ).count()
+
+    scores_as_player1 = db.query(Score).filter(
+        Score.player1_id == user_id,
+        Score.is_deleted.is_(False),
+    ).count()
+
+    scores_as_player2 = db.query(Score).filter(
+        Score.player2_id == user_id,
+        Score.is_deleted.is_(False),
+    ).count()
+
+    total_scores = scores_as_player1 + scores_as_player2
+    can_delete = active_reservations == 0
+
+    recommendations = [
+        "Les scores seront conservés de manière anonymisée pour préserver l'intégrité des classements",
+        "Les réservations terminées seront préservées pour l'historique",
+        "Les données personnelles seront marquées comme supprimées conformément au RGPD",
+    ]
+    if not can_delete:
+        recommendations.append("⚠️ Annulez d'abord les réservations actives avant la suppression")
+
+    return {
+        "user": {
+            "id": user.id,
+            "pseudo": user.pseudo,
+            "email": user.email,
+            "tickets_balance": user.tickets_balance,
+            "created_at": user.created_at.isoformat(),
+        },
+        "can_delete": can_delete,
+        "blocking_factors": {
+            "active_reservations": active_reservations
+        } if not can_delete else {},
+        "deletion_impact": {
+            "friendships_to_delete": friendships_count,
+            "promo_uses_to_delete": promo_uses_count,
+            "purchases_to_delete": purchases_count,
+            "completed_reservations_preserved": completed_reservations,
+            "scores_anonymized": total_scores,
+        },
+        "recommendations": recommendations,
+    }
+
+
+def force_cancel_user_reservations_service(
+    db: Session,
+    user_id: int,
+) -> dict:
+    """Force l'annulation de toutes les réservations actives d'un utilisateur (admin uniquement)."""
+    from app.models.reservation import Reservation, ReservationStatus
+
+    user = db.query(User).filter(
+        User.id == user_id,
+        User.is_deleted.is_(False),
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Utilisateur non trouvé",
+        )
+
+    active_reservations = db.query(Reservation).filter(
+        (Reservation.player_id == user_id) | (Reservation.player2_id == user_id),
+        Reservation.status.in_([ReservationStatus.WAITING, ReservationStatus.PLAYING]),
+        Reservation.is_deleted.is_(False),
+    ).all()
+
+    cancelled_count = 0
+    refunded_tickets = 0
+
+    for reservation in active_reservations:
+        reservation.status = ReservationStatus.CANCELLED
+
+        if reservation.player_id == user_id:
+            user.tickets_balance += reservation.tickets_used
+            refunded_tickets += reservation.tickets_used
+
+        cancelled_count += 1
+
+    db.commit()
+
+    return {
+        "message": f"Réservations de l'utilisateur '{user.pseudo}' annulées",
+        "user_id": user.id,
+        "cancelled_reservations": cancelled_count,
+        "refunded_tickets": refunded_tickets,
+        "new_tickets_balance": user.tickets_balance,
+    }
+
+
+# === STATISTIQUES ===
+
+def get_admin_stats_service(db: Session) -> dict:
+    """Récupère les statistiques globales de la plateforme."""
+    active_users = db.query(User).filter(User.is_deleted.is_(False)).count()
+    total_arcades = db.query(Arcade).filter(Arcade.is_deleted.is_(False)).count()
+    total_games = db.query(Game).filter(Game.is_deleted.is_(False)).count()
+    active_promo_codes = db.query(PromoCode).filter(
+        PromoCode.is_deleted.is_(False)
+    ).count()
+
+    total_tickets = db.query(func.sum(User.tickets_balance)).filter(
+        User.is_deleted.is_(False)
+    ).scalar() or 0
+
+    return {
+        "active_users": active_users,
+        "total_arcades": total_arcades,
+        "total_games": total_games,
+        "active_promo_codes": active_promo_codes,
+        "total_tickets_in_circulation": total_tickets,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }

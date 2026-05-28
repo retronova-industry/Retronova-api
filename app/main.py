@@ -1,6 +1,11 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi import _rate_limit_exceeded_handler
+
 from app.core.config import settings
 from app.core.security import init_firebase
 from app.core.bootstrap import bootstrap_super_admin
@@ -21,14 +26,20 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# 🔥 Rate limiter setup
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 🔥 Middleware slowapi
+app.add_middleware(SlowAPIMiddleware)
 
 # Routes
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
@@ -41,6 +52,7 @@ app.include_router(reservations.router, prefix="/api/v1/reservations", tags=["re
 app.include_router(scores.router, prefix="/api/v1/scores", tags=["scores"])
 app.include_router(promos.router, prefix="/api/v1/promos", tags=["promos"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["admin"])
+app.include_router(payments.router, prefix="/api/v1/payments", tags=["payments"])
 
 
 @app.get("/")

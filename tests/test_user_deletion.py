@@ -80,7 +80,6 @@ class TestUserDeletion:
     def test_user_self_delete_success(self, client, auth_headers_user, user_with_data, db):
         """Test de suppression de compte par l'utilisateur lui-même."""
         user_id = user_with_data.id
-        user_pseudo = user_with_data.pseudo
 
         response = client.delete("/api/v1/users/me", headers=auth_headers_user)
 
@@ -378,10 +377,6 @@ class TestUserDeletion:
     def test_rgpd_compliance_data_cleanup(self, client, auth_headers_admin, user_with_data, db):
         """Test de conformité RGPD - nettoyage des données personnelles."""
         user_id = user_with_data.id
-
-        # Créer des données personnelles
-        original_email = user_with_data.email
-        original_phone = user_with_data.numero_telephone
 
         # Supprimer l'utilisateur
         response = client.delete(f"/api/v1/admin/users/{user_id}", headers=auth_headers_admin)

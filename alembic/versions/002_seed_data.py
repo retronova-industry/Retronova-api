@@ -9,7 +9,7 @@ from typing import Sequence, Union
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.sql import table, column
-from datetime import datetime
+from datetime import datetime, timezone
 
 # revision identifiers, used by Alembic.
 revision: str = '002'
@@ -65,8 +65,8 @@ def upgrade() -> None:
         column('is_deleted', sa.Boolean)
     )
 
-    # Utiliser datetime.utcnow() au lieu de sa.func.now()
-    now = datetime.utcnow()
+    # Utiliser datetime.now(timezone.utc) au lieu de sa.func.now()
+    now = datetime.now(timezone.utc)
 
     # Insertion des offres de tickets
     op.bulk_insert(ticket_offers, [

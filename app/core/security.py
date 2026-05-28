@@ -1,7 +1,12 @@
+from fastapi import Depends, HTTPException, Header, status
 import firebase_admin
 from firebase_admin import credentials, auth
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
+from app.models.arcade import Arcade
 from .config import settings
-from typing import Optional
+from typing import Annotated, Optional
 import logging
 import os
 
@@ -24,6 +29,10 @@ def init_firebase():
 
         if not os.path.exists(settings.FIREBASE_ADMIN_CREDENTIALS_PATH):
             raise FileNotFoundError(f"Fichier Firebase admin non trouvé : {settings.FIREBASE_ADMIN_CREDENTIALS_PATH}")
+        
+        if os.getenv("CI") == "true" or not (os.path.exists(settings.FIREBASE_USER_CREDENTIALS_PATH) and os.path.exists(settings.FIREBASE_ADMIN_CREDENTIALS_PATH)):
+            print("Firebase disabled in CI")
+            return
 
         # App pour les utilisateurs finaux
         user_cred = credentials.Certificate(settings.FIREBASE_USER_CREDENTIALS_PATH)

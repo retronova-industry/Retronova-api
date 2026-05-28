@@ -443,7 +443,7 @@ class TestScores:
         assert data["wins"] == 2  # 2 victoires
         assert data["losses"] == 1  # 1 défaite
         assert data["draws"] == 1  # 1 égalité
-        assert data["win_rate"] == 50.0  # 2/4 * 100
+        assert data["win_rate"] == pytest.approx(50.0)  # 2/4 * 100
 
     def test_scores_endpoints_unauthorized(self, client, sample_user, player2, sample_game, sample_arcade):
         """Test d'accès non autorisé aux endpoints de scores."""

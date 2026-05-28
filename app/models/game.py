@@ -8,6 +8,7 @@ class Game(BaseModel):
 
     nom = Column(String, nullable=False)
     description = Column(String)
+    game_image = Column(String, nullable=True)
     min_players = Column(Integer, default=1, nullable=False)
     max_players = Column(Integer, default=2, nullable=False)
     ticket_cost = Column(Integer, default=1, nullable=False)
